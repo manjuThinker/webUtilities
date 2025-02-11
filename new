@@ -1,0 +1,66 @@
+@Service
+public class PreProcessingApiService {
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private RetryTemplate retryTemplate;
+
+    @Autowired
+    @Qualifier("initialExecutor")
+    private Executor initialExecutor;
+
+    @Autowired
+    @Qualifier("retryExecutor")
+    private Executor retryExecutor;
+
+    public <T, R> CompletableFuture<GenericApiResponse<R>> executeApiRequest(PreProcessingApiServiceRequest<T, R> apiRequest) {
+        // Initial attempt with initialExecutor
+        CompletableFuture<GenericApiResponse<R>> initialFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return executeRequest(apiRequest);
+            } catch (Exception e) {
+                throw new TXEligibleRetryException("Initial attempt failed: " + e.getMessage(), e);
+            }
+        }, initialExecutor);
+
+        // Retry attempts using retryExecutor
+        CompletionStage<GenericApiResponse<R>> retryFuture = initialFuture.exceptionallyAsync(e -> {
+            if (e instanceof TXEligibleRetryException) {
+                return retryTemplate.execute(context -> {
+                    int attempt = context.getRetryCount() + 2; // +2 because initial attempt is already counted as 1
+                    log.info("Retrying API request attempt #{} for requestId: {}", attempt, apiRequest.getSourceRequestId());
+
+                    try {
+                        return executeRequest(apiRequest);
+                    } catch (Exception ex) {
+                        throw new TXEligibleRetryException("Retry attempt failed: " + ex.getMessage(), ex);
+                    }
+                }, retryExecutor);
+            } else {
+                throw e;
+            }
+        }, retryExecutor);
+
+        return retryFuture.toCompletableFuture();
+    }
+
+    private <T, R> GenericApiResponse<R> executeRequest(PreProcessingApiServiceRequest<T, R> apiRequest) throws Exception {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<T> entity = new HttpEntity<>(apiRequest.getRequestPayload(), headers);
+
+        ResponseEntity<R> response = restTemplate.exchange(
+                apiRequest.getFullUrl(),
+                apiRequest.getMethod(),
+                entity,
+                apiRequest.getResponseType());
+
+        if (response.getStatusCode().is2xxSuccessful()) {
+            return new GenericApiResponse<>(response.getBody());
+        } else {
+            throw new TXEligibleRetryException("Failed to call external service: " + response.getStatusCode());
+        }
+    }
+}
