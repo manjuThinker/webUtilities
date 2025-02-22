@@ -1,66 +1,134 @@
 @Service
-public class PreProcessingApiService {
+public class DataService {
 
     @Autowired
     private RestTemplate restTemplate;
 
     @Autowired
-    private RetryTemplate retryTemplate;
+    private LocalDataRepository localDataRepository;
 
     @Autowired
-    @Qualifier("initialExecutor")
-    private Executor initialExecutor;
+    private CacheManager cacheManager;
 
-    @Autowired
-    @Qualifier("retryExecutor")
-    private Executor retryExecutor;
+    private static final String CACHE_NAME = "combinedData";
+    private static final String ALL_DATA_KEY = "all_combined_data";
 
-    public <T, R> CompletableFuture<GenericApiResponse<R>> executeApiRequest(PreProcessingApiServiceRequest<T, R> apiRequest) {
-        // Initial attempt with initialExecutor
-        CompletableFuture<GenericApiResponse<R>> initialFuture = CompletableFuture.supplyAsync(() -> {
-            try {
-                return executeRequest(apiRequest);
-            } catch (Exception e) {
-                throw new TXEligibleRetryException("Initial attempt failed: " + e.getMessage(), e);
-            }
-        }, initialExecutor);
+    // Fetch and combine data, then cache it
+    public void fetchAndCacheCombinedData() {
+        // Step 1: Fetch data from RestTemplate
+        ResponseEntity<List<ExternalData>> response = restTemplate.exchange(
+                "http://external-api.com/data",
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<List<ExternalData>>() {}
+        );
+        List<ExternalData> externalDataList = response.getBody();
 
-        // Retry attempts using retryExecutor
-        CompletionStage<GenericApiResponse<R>> retryFuture = initialFuture.exceptionallyAsync(e -> {
-            if (e instanceof TXEligibleRetryException) {
-                return retryTemplate.execute(context -> {
-                    int attempt = context.getRetryCount() + 2; // +2 because initial attempt is already counted as 1
-                    log.info("Retrying API request attempt #{} for requestId: {}", attempt, apiRequest.getSourceRequestId());
+        // Step 2: Fetch data from database
+        List<LocalData> localDataList = localDataRepository.findAll();
 
-                    try {
-                        return executeRequest(apiRequest);
-                    } catch (Exception ex) {
-                        throw new TXEligibleRetryException("Retry attempt failed: " + ex.getMessage(), ex);
-                    }
-                }, retryExecutor);
-            } else {
-                throw e;
-            }
-        }, retryExecutor);
+        // Step 3: Combine data based on referenceNumber
+        List<CombinedData> combinedData = combineData(externalDataList, localDataList);
 
-        return retryFuture.toCompletableFuture();
+        // Step 4: Cache the combined data
+        Cache cache = cacheManager.getCache(CACHE_NAME);
+        if (cache != null) {
+            cache.put(ALL_DATA_KEY, combinedData);
+        }
     }
 
-    private <T, R> GenericApiResponse<R> executeRequest(PreProcessingApiServiceRequest<T, R> apiRequest) throws Exception {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<T> entity = new HttpEntity<>(apiRequest.getRequestPayload(), headers);
+    // Combine external and local data
+    private List<CombinedData> combineData(List<ExternalData> externalDataList, List<LocalData> localDataList) {
+        Map<String, ExternalData> externalMap = externalDataList.stream()
+                .collect(Collectors.toMap(ExternalData::getReferenceNumber, data -> data));
 
-        ResponseEntity<R> response = restTemplate.exchange(
-                apiRequest.getFullUrl(),
-                apiRequest.getMethod(),
-                entity,
-                apiRequest.getResponseType());
+        return localDataList.stream()
+                .filter(local -> externalMap.containsKey(local.getReferenceNumber()))
+                .map(local -> {
+                    ExternalData external = externalMap.get(local.getReferenceNumber());
+                    return new CombinedData(
+                            local.getReferenceNumber(),
+                            external.getExternalField(),
+                            local.getLocalField()
+                    );
+                })
+                .collect(Collectors.toList());
+    }
 
-        if (response.getStatusCode().is2xxSuccessful()) {
-            return new GenericApiResponse<>(response.getBody());
-        } else {
-            throw new TXEligibleRetryException("Failed to call external service: " + response.getStatusCode());
+    // Get filtered, paginated, and sorted data from cache
+    public List<CombinedData> getFilteredPaginatedAndSortedData(
+            int page, int size, String sortField, String sortDirection, DataFilter filters) {
+        // Retrieve cached data
+        Cache cache = cacheManager.getCache(CACHE_NAME);
+        if (cache == null || cache.get(ALL_DATA_KEY) == null) {
+            fetchAndCacheCombinedData(); // Re-fetch if cache is empty
+            cache = cacheManager.getCache(CACHE_NAME);
         }
+
+        List<CombinedData> combinedData = (List<CombinedData>) cache.get(ALL_DATA_KEY).get();
+        if (combinedData == null || combinedData.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Apply filters
+        List<CombinedData> filteredData = combinedData.stream()
+                .filter(data -> applyFilters(data, filters))
+                .collect(Collectors.toList());
+
+        // Apply sorting
+        Comparator<CombinedData> comparator;
+        switch (sortField.toLowerCase()) {
+            case "externalfield":
+                comparator = Comparator.comparing(CombinedData::getExternalField);
+                break;
+            case "localfield":
+                comparator = Comparator.comparing(CombinedData::getLocalField);
+                break;
+            default:
+                comparator = Comparator.comparing(CombinedData::getReferenceNumber);
+        }
+        if ("desc".equalsIgnoreCase(sortDirection)) {
+            comparator = comparator.reversed();
+        }
+        List<CombinedData> sortedData = filteredData.stream()
+                .sorted(comparator)
+                .collect(Collectors.toList());
+
+        // Apply pagination
+        int start = page * size;
+        int end = Math.min(start + size, sortedData.size());
+        if (start >= sortedData.size()) {
+            return Collections.emptyList();
+        }
+
+        return sortedData.subList(start, end);
+    }
+
+    // Apply filters to a single CombinedData object
+    private boolean applyFilters(CombinedData data, DataFilter filters) {
+        if (filters.isEmpty()) {
+            return true; // No filters, include all
+        }
+
+        boolean matches = true;
+        if (!filters.getReferenceNumbers().isEmpty()) {
+            matches = matches && filters.getReferenceNumbers().contains(data.getReferenceNumber());
+        }
+        if (!filters.getExternalFields().isEmpty()) {
+            matches = matches && filters.getExternalFields().contains(data.getExternalField());
+        }
+        if (!filters.getLocalFields().isEmpty()) {
+            matches = matches && filters.getLocalFields().contains(data.getLocalField());
+        }
+        return matches;
+    }
+
+    // Clear cache when data needs to be refreshed
+    public void refreshCache() {
+        Cache cache = cacheManager.getCache(CACHE_NAME);
+        if (cache != null) {
+            cache.clear();
+        }
+        fetchAndCacheCombinedData(); // Re-fetch and re-cache
     }
 }
