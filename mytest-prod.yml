@@ -1,1 +1,20 @@
-hi
+# mytest_prod.yml
+app:
+  name: "My Test Application"
+  version: "1.0.0"
+  description: "This is a dummy configuration for production environment."
+
+database:
+  url: "jdbc:mysql://localhost:3306/mydb"
+  username: "root"
+  password: "password"
+
+features:
+  enabled: true
+  maxUsers: 100
+  timeout: 5000
+
+logging:
+  level:
+    root: "INFO"
+    com.example: "DEBUG"
