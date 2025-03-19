@@ -1,134 +1,50 @@
+@Scheduled(fixedRate = 10000)
+    @Async
+    @Transactional
+    public void fetchPendingRecords() {
+        List<Record> pendingRecords = entityManager
+                .createQuery("SELECT r FROM Record r WHERE r.status = :status", Record.class)
+                .setParameter("status", "PENDING")
+                .getResultList();
+
+        if (!pendingRecords.isEmpty()) {
+            eventPublisher.publishEvent(new PendingRecordsEvent(this, pendingRecords));
+        }
+    }
+}
+
+// Event class
+public static class PendingRecordsEvent {
+    private final Object source;
+    private final List<Record> records;
+
+    public PendingRecordsEvent(Object source, List<Record> records) {
+        this.source = source;
+        this.records = records;
+    }
+
+    public List<Record> getRecords() {
+        return records;
+    }
+}
+
+// Event listener
 @Service
-public class DataService {
+public static class RecordProcessor {
 
-    @Autowired
-    private RestTemplate restTemplate;
+    @PersistenceContext
+    private EntityManager entityManager;
 
-    @Autowired
-    private LocalDataRepository localDataRepository;
-
-    @Autowired
-    private CacheManager cacheManager;
-
-    private static final String CACHE_NAME = "combinedData";
-    private static final String ALL_DATA_KEY = "all_combined_data";
-
-    // Fetch and combine data, then cache it
-    public void fetchAndCacheCombinedData() {
-        // Step 1: Fetch data from RestTemplate
-        ResponseEntity<List<ExternalData>> response = restTemplate.exchange(
-                "http://external-api.com/data",
-                HttpMethod.GET,
-                null,
-                new ParameterizedTypeReference<List<ExternalData>>() {}
-        );
-        List<ExternalData> externalDataList = response.getBody();
-
-        // Step 2: Fetch data from database
-        List<LocalData> localDataList = localDataRepository.findAll();
-
-        // Step 3: Combine data based on referenceNumber
-        List<CombinedData> combinedData = combineData(externalDataList, localDataList);
-
-        // Step 4: Cache the combined data
-        Cache cache = cacheManager.getCache(CACHE_NAME);
-        if (cache != null) {
-            cache.put(ALL_DATA_KEY, combinedData);
+    @EventListener
+    @Async
+    @Transactional
+    public void handlePendingRecords(PendingRecordsEvent event) {
+        List<Record> records = event.getRecords();
+        System.out.println("Processing records via event on thread: " + Thread.currentThread().getName());
+        for (Record record : records) {
+            record.setStatus("PROCESSED");
+            entityManager.merge(record);
         }
-    }
-
-    // Combine external and local data
-    private List<CombinedData> combineData(List<ExternalData> externalDataList, List<LocalData> localDataList) {
-        Map<String, ExternalData> externalMap = externalDataList.stream()
-                .collect(Collectors.toMap(ExternalData::getReferenceNumber, data -> data));
-
-        return localDataList.stream()
-                .filter(local -> externalMap.containsKey(local.getReferenceNumber()))
-                .map(local -> {
-                    ExternalData external = externalMap.get(local.getReferenceNumber());
-                    return new CombinedData(
-                            local.getReferenceNumber(),
-                            external.getExternalField(),
-                            local.getLocalField()
-                    );
-                })
-                .collect(Collectors.toList());
-    }
-
-    // Get filtered, paginated, and sorted data from cache
-    public List<CombinedData> getFilteredPaginatedAndSortedData(
-            int page, int size, String sortField, String sortDirection, DataFilter filters) {
-        // Retrieve cached data
-        Cache cache = cacheManager.getCache(CACHE_NAME);
-        if (cache == null || cache.get(ALL_DATA_KEY) == null) {
-            fetchAndCacheCombinedData(); // Re-fetch if cache is empty
-            cache = cacheManager.getCache(CACHE_NAME);
-        }
-
-        List<CombinedData> combinedData = (List<CombinedData>) cache.get(ALL_DATA_KEY).get();
-        if (combinedData == null || combinedData.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // Apply filters
-        List<CombinedData> filteredData = combinedData.stream()
-                .filter(data -> applyFilters(data, filters))
-                .collect(Collectors.toList());
-
-        // Apply sorting
-        Comparator<CombinedData> comparator;
-        switch (sortField.toLowerCase()) {
-            case "externalfield":
-                comparator = Comparator.comparing(CombinedData::getExternalField);
-                break;
-            case "localfield":
-                comparator = Comparator.comparing(CombinedData::getLocalField);
-                break;
-            default:
-                comparator = Comparator.comparing(CombinedData::getReferenceNumber);
-        }
-        if ("desc".equalsIgnoreCase(sortDirection)) {
-            comparator = comparator.reversed();
-        }
-        List<CombinedData> sortedData = filteredData.stream()
-                .sorted(comparator)
-                .collect(Collectors.toList());
-
-        // Apply pagination
-        int start = page * size;
-        int end = Math.min(start + size, sortedData.size());
-        if (start >= sortedData.size()) {
-            return Collections.emptyList();
-        }
-
-        return sortedData.subList(start, end);
-    }
-
-    // Apply filters to a single CombinedData object
-    private boolean applyFilters(CombinedData data, DataFilter filters) {
-        if (filters.isEmpty()) {
-            return true; // No filters, include all
-        }
-
-        boolean matches = true;
-        if (!filters.getReferenceNumbers().isEmpty()) {
-            matches = matches && filters.getReferenceNumbers().contains(data.getReferenceNumber());
-        }
-        if (!filters.getExternalFields().isEmpty()) {
-            matches = matches && filters.getExternalFields().contains(data.getExternalField());
-        }
-        if (!filters.getLocalFields().isEmpty()) {
-            matches = matches && filters.getLocalFields().contains(data.getLocalField());
-        }
-        return matches;
-    }
-
-    // Clear cache when data needs to be refreshed
-    public void refreshCache() {
-        Cache cache = cacheManager.getCache(CACHE_NAME);
-        if (cache != null) {
-            cache.clear();
-        }
-        fetchAndCacheCombinedData(); // Re-fetch and re-cache
+        entityManager.flush();
     }
 }
