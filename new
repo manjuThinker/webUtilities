@@ -1,50 +1,48 @@
-@Scheduled(fixedRate = 10000)
-    @Async
-    @Transactional
-    public void fetchPendingRecords() {
-        List<Record> pendingRecords = entityManager
-                .createQuery("SELECT r FROM Record r WHERE r.status = :status", Record.class)
-                .setParameter("status", "PENDING")
-                .getResultList();
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Component;
+import java.util.function.Supplier;
 
-        if (!pendingRecords.isEmpty()) {
-            eventPublisher.publishEvent(new PendingRecordsEvent(this, pendingRecords));
+@Component
+public class RetryUtil {
+    private final ApplicationEventPublisher eventPublisher;
+
+    public RetryUtil(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
+
+    public <T> T executeWithRetry(Supplier<T> operation, String operationId, int maxRetries, long initialDelayMs, double multiplier) {
+        int attempts = 0;
+        Throwable lastException = null;
+
+        while (attempts < maxRetries) {
+            try {
+                return operation.get(); // Execute the operation
+            } catch (Exception e) {
+                attempts++;
+                lastException = e;
+
+                // Publish failure event
+                eventPublisher.publishEvent(new MethodFailureEvent(
+                    operationId,
+                    e.getMessage() != null ? e.getMessage() : "Unknown error",
+                    e
+                ));
+
+                if (attempts < maxRetries) {
+                    // Calculate exponential delay: initialDelay * (multiplier ^ (attempts - 1))
+                    long delayMs = (long) (initialDelayMs * Math.pow(multiplier, attempts - 1));
+                    System.out.println("Attempt " + attempts + " failed. Waiting " + delayMs + "ms before retrying...");
+
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Retry interrupted", ie);
+                    }
+                }
+            }
         }
-    }
-}
 
-// Event class
-public static class PendingRecordsEvent {
-    private final Object source;
-    private final List<Record> records;
-
-    public PendingRecordsEvent(Object source, List<Record> records) {
-        this.source = source;
-        this.records = records;
-    }
-
-    public List<Record> getRecords() {
-        return records;
-    }
-}
-
-// Event listener
-@Service
-public static class RecordProcessor {
-
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    @EventListener
-    @Async
-    @Transactional
-    public void handlePendingRecords(PendingRecordsEvent event) {
-        List<Record> records = event.getRecords();
-        System.out.println("Processing records via event on thread: " + Thread.currentThread().getName());
-        for (Record record : records) {
-            record.setStatus("PROCESSED");
-            entityManager.merge(record);
-        }
-        entityManager.flush();
+        throw new RuntimeException("Operation failed after " + maxRetries + " attempts", lastException);
     }
 }
