@@ -46,3 +46,30 @@ public class RetryUtil {
         throw new RuntimeException("Operation failed after " + maxRetries + " attempts", lastException);
     }
 }
+
+
+==
+
+public class MethodFailureEvent {
+    private final String operationId;
+    private final String errorMessage;
+    private final Throwable exception;
+
+    public MethodFailureEvent(String operationId, String errorMessage, Throwable exception) {
+        this.operationId = operationId;
+        this.errorMessage = errorMessage;
+        this.exception = exception;
+    }
+
+    public String getOperationId() {
+        return operationId;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public Throwable getException() {
+        return exception;
+    }
+}
