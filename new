@@ -108,3 +108,29 @@ public class FailureEventHandler {
         retryRepository.save(retryRecord);
     }
 }
+================
+
+private Predicate<CombinedData> applyStringListFilter(
+    Predicate<CombinedData> currentPredicate,
+    List<String> filterValues,
+    Function<CombinedData, String> getter,
+    String filterName
+) {
+    if (filterValues != null && !filterValues.isEmpty()) {
+        log.debug("Applying {} filter: {}", filterName, filterValues);
+        return currentPredicate.and(item -> {
+            String itemValue = getter.apply(item);
+            if (itemValue == null) {
+                return false;
+            }
+            
+            // Check if any filter value is partially contained within the item value
+            // or if the item value partially contains any filter value
+            return filterValues.stream().anyMatch(filterValue -> 
+                itemValue.toLowerCase().contains(filterValue.toLowerCase()) || 
+                filterValue.toLowerCase().contains(itemValue.toLowerCase())
+            );
+        });
+    }
+    return currentPredicate;
+}
