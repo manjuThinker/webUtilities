@@ -134,3 +134,62 @@ private Predicate<CombinedData> applyStringListFilter(
     }
     return currentPredicate;
 }
+=======================
+
+10 Scenarios for Amount Filtering
+
+Scenario: Start = 5000, End = 5000
+Expected Result: Only exact matches of 5000 will be returned
+Explanation: The filter checks for itemAmount >= 5000 && itemAmount <= 5000, which is only true when itemAmount == 5000
+Scenario: Start = 1000, End = 5000
+Expected Result: All amounts between 1000 and 5000 (inclusive) will be returned
+Explanation: Filter returns all records with 1000 ≤ amount ≤ 5000
+Scenario: Start = 0, End = 5000
+Expected Result: All amounts from 0 up to 5000 will be returned
+Explanation: Filter returns all records with amount ≤ 5000
+Scenario: Start = 1000, End = 0
+Expected Result: All amounts from 1000 and above will be returned
+Explanation: With the improved code, when end is 0, it's treated as no upper limit
+Scenario: Start = 0, End = 0
+Expected Result: All records will be returned
+Explanation: This effectively removes both lower and upper bounds, returning everything
+Scenario: Start = null/empty, End = 5000
+Expected Result: All amounts up to 5000 will be returned
+Explanation: The null/empty start is treated as 0
+Scenario: Start = 1000, End = null/empty
+Expected Result: All amounts from 1000 and above will be returned
+Explanation: The null/empty end is treated as having no upper bound
+Scenario: Start = null/empty, End = null/empty
+Expected Result: All records will be returned (filter not applied)
+Explanation: Both bounds are effectively removed
+Scenario: Start = -1000, End = 5000
+Expected Result: All amounts from -1000 to 5000 will be returned
+Explanation: Handles negative values correctly if your data has them
+Scenario: Start = 5000.50, End = 7500.75
+Expected Result: All amounts between 5000.50 and 7500.75 (inclusive) will be returned
+Explanation: Handles decimal values correctly
+
+Here's the updated code to handle all these scenarios properly:
+javaCopyif (filterForm.getLcAmount() != null && filterForm.getLcAmount().size() >= 2) {
+    String startAmountStr = filterForm.getLcAmount().get(0);
+    String endAmountStr = filterForm.getLcAmount().get(1);
+    
+    // Handle empty or null values
+    boolean hasStartAmount = startAmountStr != null && !startAmountStr.isEmpty() && !"0".equals(startAmountStr);
+    boolean hasEndAmount = endAmountStr != null && !endAmountStr.isEmpty() && !"0".equals(endAmountStr);
+    
+    if (hasStartAmount || hasEndAmount) {
+        // Only apply filter if at least one bound is specified
+        BigDecimal startAmount = hasStartAmount ? new BigDecimal(startAmountStr) : BigDecimal.ZERO;
+        // If endAmount is zero or empty, set it to a very large number
+        BigDecimal endAmount = hasEndAmount ? new BigDecimal(endAmountStr) : new BigDecimal("999999999999.99");
+        
+        log.debug("Applying LC amount range filter from {} to {}", startAmount, endAmount);
+        predicate = predicate.and(item -> {
+            BigDecimal itemAmount = item.getLcAmount();
+            return itemAmount != null && 
+                   itemAmount.compareTo(startAmount) >= 0 && 
+                   itemAmount.compareTo(endAmount) <= 0;
+        });
+    }
+}
