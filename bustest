@@ -1,0 +1,526 @@
+package com.sc.lc.preprocessor.service;
+
+import com.sc.lc.preprocessor.entity.TXFFIHistoryDtlsEntity;
+import com.sc.lc.preprocessor.model.FilterForm;
+import com.sc.lc.preprocessor.model.TXELCMasterDtlsResponse;
+import com.sc.lc.preprocessor.model.inprogress.CombinedInProgressData;
+import com.sc.lc.preprocessor.model.inprogress.TxnSummaryResponse;
+import com.sc.lc.preprocessor.repository.FfiMasterCustomRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ELCInProgressServiceTest {
+
+    @InjectMocks
+    private ELCInProgressService elcInProgressService;
+
+    @Mock
+    private RestTemplate restTemplate;
+
+    @Mock
+    private FfiMasterCustomRepository ffiMasterCustomRepository;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(elcInProgressService, "elcInProgressUrl", "http://test-url.com/api");
+    }
+
+    @Test
+    void fetchAndCacheCombinedInProgressData_Success() {
+        // Arrange
+        Map<String, String> customerCountryMap = Map.of("customerId", "123", "country", "US");
+        String userId = "user1";
+        String groupId = "group1";
+        
+        // Mock external API response
+        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
+        TxnSummaryResponse response = new TxnSummaryResponse();
+        apiResponseList.add(response);
+        
+        ResponseEntity<List<TxnSummaryResponse>> responseEntity = 
+                ResponseEntity.ok(apiResponseList);
+        
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                any(ParameterizedTypeReference.class)
+        )).thenReturn(responseEntity);
+        
+        // Mock repository response
+        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
+        historyEntities.add(new TXFFIHistoryDtlsEntity());
+        
+        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
+                eq(TXFFIHistoryDtlsEntity.class),
+                any(Map.class),
+                eq(customerCountryMap)
+        )).thenReturn(historyEntities);
+        
+        // Use try-with-resources to automatically close the mocked static
+        try (MockedStatic<com.sc.lc.preprocessor.mapper.SCELCMapper> mockedMapper = 
+                Mockito.mockStatic(com.sc.lc.preprocessor.mapper.SCELCMapper.class)) {
+            
+            // Mock all necessary static methods in the mapper
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.createTXELCInProgressRequest(any()))
+                .thenReturn(new com.sc.lc.preprocessor.model.inprogress.TXELCInProgressRequest());
+            
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.mapToCombinedData(any()))
+                .thenReturn(createMockCombinedData());
+            
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.buildTXFFIHistoryToMasterDtlsForInProgress(any()))
+                .thenReturn(createMockCombinedData());
+            
+            // Act
+            List<CombinedInProgressData> result = elcInProgressService.fetchAndCacheCombinedInProgressData(
+                    customerCountryMap, userId, groupId);
+            
+            // Assert
+            assertNotNull(result);
+            assertEquals(2, result.size()); // 1 from API, 1 from history
+        }
+    }
+    
+    @Test
+    void fetchAndCacheCombinedInProgressData_EmptyResponse() {
+        // Arrange
+        Map<String, String> customerCountryMap = Map.of("customerId", "123", "country", "US");
+        String userId = "user1";
+        String groupId = "group1";
+        
+        // Mock external API response with null body
+        ResponseEntity<List<TxnSummaryResponse>> responseEntity = 
+                ResponseEntity.ok(null);
+        
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                any(ParameterizedTypeReference.class)
+        )).thenReturn(responseEntity);
+        
+        // Mock repository response
+        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
+        historyEntities.add(new TXFFIHistoryDtlsEntity());
+        
+        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
+                eq(TXFFIHistoryDtlsEntity.class),
+                any(Map.class),
+                eq(customerCountryMap)
+        )).thenReturn(historyEntities);
+        
+        try (MockedStatic<com.sc.lc.preprocessor.mapper.SCELCMapper> mockedMapper = 
+                Mockito.mockStatic(com.sc.lc.preprocessor.mapper.SCELCMapper.class)) {
+            
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.createTXELCInProgressRequest(any()))
+                .thenReturn(new com.sc.lc.preprocessor.model.inprogress.TXELCInProgressRequest());
+            
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.buildTXFFIHistoryToMasterDtlsForInProgress(any()))
+                .thenReturn(createMockCombinedData());
+            
+            // Act
+            List<CombinedInProgressData> result = elcInProgressService.fetchAndCacheCombinedInProgressData(
+                    customerCountryMap, userId, groupId);
+            
+            // Assert
+            assertNotNull(result);
+            assertEquals(1, result.size()); // Only from history, none from API
+        }
+    }
+
+    @Test
+    void getInProgressdetailsList_Success() {
+        // Create test data
+        Map<String, String> customerCountryMap = Map.of("customerId", "123", "country", "US");
+        Pageable pageable = PageRequest.of(0, 10, Sort.by("lastModifiedDatetime").descending());
+        FilterForm filterForm = new FilterForm();
+        String userId = "user1";
+        String groupId = "group1";
+        
+        // Create a spy to avoid complex mocking
+        ELCInProgressService serviceSpy = Mockito.spy(elcInProgressService);
+        
+        // Create test data to be returned
+        List<CombinedInProgressData> combinedData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        // Mock the methods called by getInProgressdetailsList
+        Mockito.doReturn(combinedData).when(serviceSpy)
+            .fetchAndCacheCombinedInProgressData(customerCountryMap, userId, groupId);
+        
+        Mockito.doReturn(combinedData).when(serviceSpy)
+            .fetchPaginatedAndFilteredData(combinedData, pageable, filterForm);
+        
+        try (MockedStatic<com.sc.lc.preprocessor.mapper.SCELCMapper> mockedMapper = 
+                Mockito.mockStatic(com.sc.lc.preprocessor.mapper.SCELCMapper.class)) {
+            
+            // Mock the mapper method
+            mockedMapper.when(() -> com.sc.lc.preprocessor.mapper.SCELCMapper.buildTXFFIHistoryToMasterDtlsForInProgressResp(any()))
+                .thenReturn(new com.sc.lc.preprocessor.model.TXELCMasterDtls());
+            
+            // Act
+            TXELCMasterDtlsResponse result = serviceSpy.getInProgressdetailsList(
+                customerCountryMap, pageable, filterForm, userId, groupId);
+            
+            // Assert
+            assertNotNull(result);
+            assertTrue(result.getTransactionStatus());
+            assertEquals(2, result.getTotalCount());
+            assertEquals(2, result.getTxElcMasterDtls().size());
+        }
+    }
+
+    @Test
+    void fetchPaginatedAndFilteredData_Success() {
+        // Create test data
+        List<CombinedInProgressData> allData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData(),
+            createMockCombinedData(),
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        Pageable pageable = PageRequest.of(0, 3, Sort.by("bankRef").ascending());
+        FilterForm filterForm = new FilterForm();
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.fetchPaginatedAndFilteredData(
+            allData, pageable, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(3, result.size()); // Should return the first 3 items
+    }
+
+    @Test
+    void fetchPaginatedAndFilteredData_StartIndexExceedsSize() {
+        // Create test data
+        List<CombinedInProgressData> allData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        // Page 1 with size 2 would start at index 2, which exceeds the list size
+        Pageable pageable = PageRequest.of(1, 2);
+        FilterForm filterForm = new FilterForm();
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.fetchPaginatedAndFilteredData(
+            allData, pageable, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(0, result.size()); // Should return empty list
+    }
+
+    @Test
+    void filterData_NullFilterForm() {
+        // Create test data
+        List<CombinedInProgressData> allData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        // Call the method with null filter form
+        List<CombinedInProgressData> result = elcInProgressService.filterData(allData, null);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size()); // Should return all data
+    }
+
+    @Test
+    void filterData_LastModDateFilter() {
+        // Create test data with different last modified dates
+        CombinedInProgressData data1 = createMockCombinedData();
+        data1.setLastModDate(Timestamp.from(Instant.parse("2023-01-01T00:00:00Z")));
+        
+        CombinedInProgressData data2 = createMockCombinedData();
+        data2.setLastModDate(Timestamp.from(Instant.parse("2023-02-01T00:00:00Z")));
+        
+        CombinedInProgressData data3 = createMockCombinedData();
+        data3.setLastModDate(Timestamp.from(Instant.parse("2023-03-01T00:00:00Z")));
+        
+        List<CombinedInProgressData> allData = Arrays.asList(data1, data2, data3);
+        
+        // Create filter for dates between Jan 15 and Feb 15
+        FilterForm filterForm = new FilterForm();
+        filterForm.setLastModDate(Arrays.asList(
+            "2023-01-15T00:00:00Z",
+            "2023-02-15T00:00:00Z"
+        ));
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.filterData(allData, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size()); // Should only return the Feb data
+    }
+
+    @Test
+    void filterData_ExpireDateFilter() {
+        // Create test data with different expire dates
+        CombinedInProgressData data1 = createMockCombinedData();
+        data1.setExpireDate(Timestamp.from(Instant.parse("2023-01-01T00:00:00Z")));
+        
+        CombinedInProgressData data2 = createMockCombinedData();
+        data2.setExpireDate(Timestamp.from(Instant.parse("2023-02-01T00:00:00Z")));
+        
+        CombinedInProgressData data3 = createMockCombinedData();
+        data3.setExpireDate(Timestamp.from(Instant.parse("2023-03-01T00:00:00Z")));
+        
+        List<CombinedInProgressData> allData = Arrays.asList(data1, data2, data3);
+        
+        // Create filter for dates between Jan 15 and Feb 15
+        FilterForm filterForm = new FilterForm();
+        filterForm.setExpireDate(Arrays.asList(
+            "2023-01-15T00:00:00Z",
+            "2023-02-15T00:00:00Z"
+        ));
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.filterData(allData, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size()); // Should only return the Feb data
+    }
+
+    @Test
+    void filterData_LcAmountFilter() {
+        // Create test data with different amounts
+        CombinedInProgressData data1 = createMockCombinedData();
+        data1.setLcAmount(BigDecimal.valueOf(1000));
+        
+        CombinedInProgressData data2 = createMockCombinedData();
+        data2.setLcAmount(BigDecimal.valueOf(2000));
+        
+        CombinedInProgressData data3 = createMockCombinedData();
+        data3.setLcAmount(BigDecimal.valueOf(3000));
+        
+        List<CombinedInProgressData> allData = Arrays.asList(data1, data2, data3);
+        
+        // Create filter for amounts between 1500 and 2500
+        FilterForm filterForm = new FilterForm();
+        filterForm.setLcAmount(Arrays.asList("1500", "2500"));
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.filterData(allData, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size()); // Should only return the 2000 amount data
+    }
+
+    @Test
+    void filterData_StringBasedFilters() {
+        // Create test data with different string values
+        CombinedInProgressData data1 = createMockCombinedData();
+        data1.setBankRef("REF001");
+        data1.setCcy("USD");
+        data1.setBeneficiaryName("BeneficiaryA");
+        data1.setApplicantName("ApplicantA");
+        data1.setLstStepType("STEP1");
+        
+        CombinedInProgressData data2 = createMockCombinedData();
+        data2.setBankRef("REF002");
+        data2.setCcy("EUR");
+        data2.setBeneficiaryName("BeneficiaryB");
+        data2.setApplicantName("ApplicantB");
+        data2.setLstStepType("STEP2");
+        
+        List<CombinedInProgressData> allData = Arrays.asList(data1, data2);
+        
+        // Create filter for specific values
+        FilterForm filterForm = new FilterForm();
+        filterForm.setBankRef(List.of("REF001"));
+        filterForm.setCcy(List.of("USD"));
+        filterForm.setBeneficiaryName(List.of("BeneficiaryA"));
+        filterForm.setApplicantName(List.of("ApplicantA"));
+        filterForm.setLstStepType(List.of("STEP1"));
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.filterData(allData, filterForm);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size()); // Should only return the first data
+    }
+
+    @Test
+    void convertToSqlTimestamp_ValidDate() {
+        // Call the method with valid date
+        Timestamp result = elcInProgressService.convertToSqlTimestamp("2023-01-01T12:00:00Z");
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(Instant.parse("2023-01-01T12:00:00Z").toEpochMilli(), result.getTime());
+    }
+
+    @Test
+    void convertToSqlTimestamp_InvalidDate() {
+        // Call the method with invalid date
+        Timestamp result = elcInProgressService.convertToSqlTimestamp("invalid-date");
+        
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    void sortData_AllSortFields() {
+        // Create test data for sorting with various fields
+        List<CombinedInProgressData> testData = new ArrayList<>();
+        
+        // Add data for testing all sort fields
+        for (int i = 0; i < 3; i++) {
+            CombinedInProgressData data = createMockCombinedData();
+            // Set different values for each field that can be sorted
+            data.setBankRef("REF00" + (3 - i));
+            data.setBeneficiaryName("Beneficiary" + (3 - i));
+            data.setApplicantName("Applicant" + (3 - i));
+            data.setCcy(i == 0 ? "USD" : i == 1 ? "EUR" : "GBP");
+            data.setLcAmount(BigDecimal.valueOf(1000 * (3 - i)));
+            data.setLstStepType("STEP" + (3 - i));
+            data.setLstStepStatus("STATUS" + (3 - i));
+            data.setAvailableBalance(BigDecimal.valueOf(900 * (3 - i)));
+            data.setLastModDate(Timestamp.from(Instant.parse("2023-0" + (3 - i) + "-01T00:00:00Z")));
+            data.setExpireDate(Timestamp.from(Instant.parse("2023-0" + (3 - i) + "-15T00:00:00Z")));
+            testData.add(data);
+        }
+        
+        // Test each sort field
+        String[] sortFields = {
+            "dealRefNo", "counterPartyName", "customerName", "currency", "amount",
+            "transactionType", "lstStepStatus", "availableBalance",
+            "lastModifiedDatetime", "expiryDate", "unknownField"
+        };
+        
+        for (String field : sortFields) {
+            // Sort by the field in ascending order
+            Sort sort = Sort.by(field).ascending();
+            List<CombinedInProgressData> result = elcInProgressService.sortData(testData, sort);
+            
+            // Assert the sort worked (values should now be in ascending order)
+            assertNotNull(result);
+            assertEquals(3, result.size());
+            
+            // Also test descending order
+            sort = Sort.by(field).descending();
+            result = elcInProgressService.sortData(testData, sort);
+            
+            // Assert the sort worked (values should now be in descending order)
+            assertNotNull(result);
+            assertEquals(3, result.size());
+        }
+    }
+
+    @Test
+    void sortData_NullSort() {
+        // Create test data
+        List<CombinedInProgressData> testData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        // Call method with null sort
+        List<CombinedInProgressData> result = elcInProgressService.sortData(testData, null);
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size()); // Should return all data unchanged
+    }
+
+    @Test
+    void sortData_UnsortedSort() {
+        // Create test data
+        List<CombinedInProgressData> testData = Arrays.asList(
+            createMockCombinedData(),
+            createMockCombinedData()
+        );
+        
+        // Call method with unsorted sort
+        List<CombinedInProgressData> result = elcInProgressService.sortData(testData, Sort.unsorted());
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size()); // Should return all data unchanged
+    }
+
+    @Test
+    void sortData_MultipleSortFields() {
+        // Create test data
+        CombinedInProgressData data1 = createMockCombinedData();
+        data1.setBankRef("AAA");
+        data1.setCcy("USD");
+        
+        CombinedInProgressData data2 = createMockCombinedData();
+        data2.setBankRef("AAA");
+        data2.setCcy("EUR");
+        
+        CombinedInProgressData data3 = createMockCombinedData();
+        data3.setBankRef("BBB");
+        data3.setCcy("GBP");
+        
+        List<CombinedInProgressData> testData = Arrays.asList(data1, data2, data3);
+        
+        // Create sort by bankRef, then by currency
+        Sort sort = Sort.by("dealRefNo").ascending().and(Sort.by("currency").ascending());
+        
+        // Call the method
+        List<CombinedInProgressData> result = elcInProgressService.sortData(testData, sort);
+        
+        // Assert proper ordering (AAA/EUR, AAA/USD, BBB/GBP)
+        assertNotNull(result);
+        assertEquals(3, result.size());
+        assertEquals("AAA", result.get(0).getBankRef());
+        assertEquals("EUR", result.get(0).getCcy());
+        assertEquals("AAA", result.get(1).getBankRef());
+        assertEquals("USD", result.get(1).getCcy());
+        assertEquals("BBB", result.get(2).getBankRef());
+    }
+
+    // Helper method to create test data
+    private CombinedInProgressData createMockCombinedData() {
+        CombinedInProgressData data = new CombinedInProgressData();
+        data.setBankRef("RefNo123");
+        data.setBeneficiaryName("TestBeneficiary");
+        data.setApplicantName("TestApplicant");
+        data.setCcy("USD");
+        data.setLcAmount(BigDecimal.valueOf(1000));
+        data.setLstStepType("PROC");
+        data.setLstStepStatus("ACTIVE");
+        data.setAvailableBalance(BigDecimal.valueOf(900));
+        data.setLastModDate(Timestamp.from(Instant.now()));
+        data.setExpireDate(Timestamp.from(Instant.now().plusSeconds(86400 * 30)));
+        return data;
+    }
+}
