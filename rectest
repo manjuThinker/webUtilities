@@ -1,30 +1,69 @@
-@Test
-void testMapToCombinedData() {
-    // Input TxnSummary
-    TxnSummaryResponse.TxnSummary txnSummary = new TxnSummaryResponse.TxnSummary();
-    txnSummary.setDealReferenceNo(new TXCustomerReference("DEAL123"));
-    txnSummary.setCounterPartyDealRefNo(new TXCustomerReference("COUNTERPARTY123"));
-    txnSummary.setCustomerName(new TXCustomerReference("John Doe"));
-    txnSummary.setLastModifiedDate(new TXCustomerReference("2023-10-01T12:00:00Z"));
-    txnSummary.setExpiryDate(new TXCustomerReference("2023-12-31"));
-    txnSummary.setTransactionDate(new TXCustomerReference("2023-09-01T12:00:00Z"));
-    txnSummary.setAttachmentCount(new TXCustomerReference(BigDecimal.ONE));
-    txnSummary.setDtpcustomerID(new TXDTPcustomerID("CUST123"));
-    txnSummary.setCountryCode(new TXCustomerReference(TXCountryCode.US));
-    txnSummary.setStepNo(new TXCustomerReference("1"));
-    txnSummary.setStep(new TXCustomerReference(new TXStep("STEP_CODE")));
+import com.sc.dtpquery.*;
+import com.sc.lc.preprocessor.model.inprogress.CombinedInProgressData;
+import com.sc.lc.preprocessor.model.inprogress.TxnSummaryResponse;
+import com.sc.lc.preprocessor.mapper.SCELCMapper;
+import com.sc.model.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-    // Call the method
-    CombinedInProgressData result = scelcMapper.mapToCombinedData(txnSummary);
+import java.math.BigDecimal;
 
-    // Assertions
-    assertNotNull(result);
-    assertEquals("DEAL123", result.getBankRef());
-    assertEquals("COUNTERPARTY123", result.getBeneficiaryName());
-    assertEquals("John Doe", result.getApplicantName());
-    assertTrue(result.isHasAttachment());
-    assertEquals("CUST123", result.getDtpCustomerId());
-    assertEquals("US", result.getCountryCode());
-    assertEquals("1", result.getStepNo());
-    assertEquals("STEP_CODE", result.getStepCode());
+import static org.junit.jupiter.api.Assertions.*;
+
+class SCELCMapperTest {
+
+    @Mock
+    private CodeDecodeService codeDecodeService;
+
+    @InjectMocks
+    private SCELCMapper scelcMapper;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testMapToCombinedData_Success() {
+        // Create TxnSummaryResponse with TxnSummary
+        TxnSummaryResponse response = new TxnSummaryResponse();
+        TxnSummaryResponse.TxnSummary txnSummary = TxnSummaryResponse.TxnSummary.builder()
+                .dealReferenceNo(TXTransactionReference.of("DEAL123"))
+                .customerName(TXPartyName.of("John Doe"))
+                .lastModifiedDate(new DatePayload("2023-10-01T12:00:00Z"))
+                .expiryDate(new DatePayload("2023-12-31"))
+                .transactionDate(new DatePayload("2023-09-01T12:00:00Z"))
+                .attachmentCount(TXBigDecimalValue.of(BigDecimal.ONE))
+                .dtpcustomerID(TXDTPID.of("CUST123"))
+                .countryCode(TXCountry.of(TXCountryCode.valueOf("AE")))
+                .build();
+
+        response.setTxnSummary(txnSummary);
+
+        // Call the method
+        CombinedInProgressData result = scelcMapper.mapToCombinedData(txnSummary);
+
+        // Assertions
+        assertNotNull(result);
+        assertEquals("DEAL123", result.getBankRef());
+        assertEquals("John Doe", result.getApplicantName());
+        assertEquals("2023-10-01T12:00:00Z", result.getLastModifiedDate().getValue());
+        assertEquals("2023-12-31", result.getExpiryDate().getValue());
+        assertEquals("2023-09-01T12:00:00Z", result.getTransactionDate().getValue());
+        assertTrue(result.isHasAttachment());
+        assertEquals("CUST123", result.getDtpCustomerId());
+        assertEquals("AE", result.getCountryCode().getCode().name());
+    }
+
+    @Test
+    void testMapToCombinedData_NullInput() {
+        // Call the method with null input
+        CombinedInProgressData result = scelcMapper.mapToCombinedData(null);
+
+        // Assertions
+        assertNull(result);
+    }
 }
