@@ -1,42 +1,30 @@
 @Test
-void testBuildTXFFIHistoryToMasterDtlsForInProgress() {
-    // Mocking the codeDecodeService response
-    Map<String, Map<String, String>> codeDecodeResponses = new HashMap<>();
-    Map<String, String> tc091Map = new HashMap<>();
-    tc091Map.put("STATUS_1", "Mapped_Status_1");
-    codeDecodeResponses.put(SCELCConstant.CODE_ID_TC091, tc091Map);
-
-    when(codeDecodeService.getcodeDescrptionMap()).thenReturn(codeDecodeResponses);
-
-    // Input entity
-    TXFFIHistoryDtlsEntity entity = new TXFFIHistoryDtlsEntity();
-    entity.setCurrency("USD");
-    entity.setCustomerName("John Doe");
-    entity.setCounterPartyName("Jane Doe");
-    entity.setAmount(new BigDecimal("1000.00"));
-    entity.setExpiryDate(LocalDate.of(2023, 12, 31));
-    entity.setLastModifiedDatetime(Timestamp.valueOf(LocalDateTime.now()));
-    entity.setDealRefNo("DEAL123");
-    entity.setCustomerWorkflowStatus("STATUS_1");
-    entity.setTransactionType("TXN_TYPE_1");
-    entity.setInitiationRequestId("REQ123");
-    entity.setCreatedBy("Admin");
-    entity.setDtpCustomerId("CUST123");
-    entity.setCityCode("NY");
-    entity.setAttachmentFlag(true);
-    entity.setComments("Rejected due to errors");
+void testMapToCombinedData() {
+    // Input TxnSummary
+    TxnSummaryResponse.TxnSummary txnSummary = new TxnSummaryResponse.TxnSummary();
+    txnSummary.setDealReferenceNo(new TXCustomerReference("DEAL123"));
+    txnSummary.setCounterPartyDealRefNo(new TXCustomerReference("COUNTERPARTY123"));
+    txnSummary.setCustomerName(new TXCustomerReference("John Doe"));
+    txnSummary.setLastModifiedDate(new TXCustomerReference("2023-10-01T12:00:00Z"));
+    txnSummary.setExpiryDate(new TXCustomerReference("2023-12-31"));
+    txnSummary.setTransactionDate(new TXCustomerReference("2023-09-01T12:00:00Z"));
+    txnSummary.setAttachmentCount(new TXCustomerReference(BigDecimal.ONE));
+    txnSummary.setDtpcustomerID(new TXDTPcustomerID("CUST123"));
+    txnSummary.setCountryCode(new TXCustomerReference(TXCountryCode.US));
+    txnSummary.setStepNo(new TXCustomerReference("1"));
+    txnSummary.setStep(new TXCustomerReference(new TXStep("STEP_CODE")));
 
     // Call the method
-    CombinedInProgressData result = scelcMapper.buildTXFFIHistoryToMasterDtlsForInProgress(entity);
+    CombinedInProgressData result = scelcMapper.mapToCombinedData(txnSummary);
 
     // Assertions
     assertNotNull(result);
-    assertEquals("USD", result.getCcy());
+    assertEquals("DEAL123", result.getBankRef());
+    assertEquals("COUNTERPARTY123", result.getBeneficiaryName());
     assertEquals("John Doe", result.getApplicantName());
-    assertEquals("Jane Doe", result.getBeneficiaryName());
-    assertEquals(new BigDecimal("1000.00"), result.getAvailableBalance());
-    assertEquals("Mapped_Status_1", result.getLstStepStatus());
-    assertEquals("REQ123", result.getNotifyID());
     assertTrue(result.isHasAttachment());
-    assertEquals("Rejected due to errors", result.getRepairRejectReason());
+    assertEquals("CUST123", result.getDtpCustomerId());
+    assertEquals("US", result.getCountryCode());
+    assertEquals("1", result.getStepNo());
+    assertEquals("STEP_CODE", result.getStepCode());
 }
