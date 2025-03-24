@@ -1,27 +1,42 @@
 @Test
-void testCreateTXELCInProgressRequest() {
-    // Input data
-    Map<String, String> customerCountryMap = new HashMap<>();
-    customerCountryMap.put("CUST123", "US");
-    customerCountryMap.put("CUST456", "GB");
+void testBuildTXFFIHistoryToMasterDtlsForInProgress() {
+    // Mocking the codeDecodeService response
+    Map<String, Map<String, String>> codeDecodeResponses = new HashMap<>();
+    Map<String, String> tc091Map = new HashMap<>();
+    tc091Map.put("STATUS_1", "Mapped_Status_1");
+    codeDecodeResponses.put(SCELCConstant.CODE_ID_TC091, tc091Map);
+
+    when(codeDecodeService.getcodeDescrptionMap()).thenReturn(codeDecodeResponses);
+
+    // Input entity
+    TXFFIHistoryDtlsEntity entity = new TXFFIHistoryDtlsEntity();
+    entity.setCurrency("USD");
+    entity.setCustomerName("John Doe");
+    entity.setCounterPartyName("Jane Doe");
+    entity.setAmount(new BigDecimal("1000.00"));
+    entity.setExpiryDate(LocalDate.of(2023, 12, 31));
+    entity.setLastModifiedDatetime(Timestamp.valueOf(LocalDateTime.now()));
+    entity.setDealRefNo("DEAL123");
+    entity.setCustomerWorkflowStatus("STATUS_1");
+    entity.setTransactionType("TXN_TYPE_1");
+    entity.setInitiationRequestId("REQ123");
+    entity.setCreatedBy("Admin");
+    entity.setDtpCustomerId("CUST123");
+    entity.setCityCode("NY");
+    entity.setAttachmentFlag(true);
+    entity.setComments("Rejected due to errors");
 
     // Call the method
-    TXELCInProgressRequest request = scelcMapper.createTXELCInProgressRequest(customerCountryMap);
+    CombinedInProgressData result = scelcMapper.buildTXFFIHistoryToMasterDtlsForInProgress(entity);
 
     // Assertions
-    assertNotNull(request);
-    assertEquals("ELC", request.getProductCode());
-    assertEquals(2, request.getScbCustomerDetails().size());
-
-    // Verify first customer details
-    TXELCInProgressRequest.SCBCustomerDtls firstCustomer = request.getScbCustomerDetails().get(0);
-    assertEquals("CUST123", firstCustomer.getCustomerId());
-    assertEquals(TXCountry.of(TXCountryCode.US), firstCustomer.getCountryCode());
-    assertEquals("SC", firstCustomer.getInstitution());
-    assertEquals("CUST123", firstCustomer.getDtpCustomerId());
-
-    // Verify second customer details
-    TXELCInProgressRequest.SCBCustomerDtls secondCustomer = request.getScbCustomerDetails().get(1);
-    assertEquals("CUST456", secondCustomer.getCustomerId());
-    assertEquals(TXCountry.of(TXCountryCode.GB), secondCustomer.getCountryCode());
+    assertNotNull(result);
+    assertEquals("USD", result.getCcy());
+    assertEquals("John Doe", result.getApplicantName());
+    assertEquals("Jane Doe", result.getBeneficiaryName());
+    assertEquals(new BigDecimal("1000.00"), result.getAvailableBalance());
+    assertEquals("Mapped_Status_1", result.getLstStepStatus());
+    assertEquals("REQ123", result.getNotifyID());
+    assertTrue(result.isHasAttachment());
+    assertEquals("Rejected due to errors", result.getRepairRejectReason());
 }
