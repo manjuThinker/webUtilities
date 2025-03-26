@@ -1,3 +1,18 @@
+
+1. Start → Scheduler runs every 15 seconds.
+2. ↓ Fetch → Query: Get 'pending' OR 'pending retry' where next_retry_time <= now.
+3. ↓ Process → Attempt to process each record.
+4. ↓ Success? → If yes, set status = 'success', next_retry_time = null, attempt_count = 0.
+5. ↓ Failure? → If no, publish FailedEvent with record details.
+6. ↓ Event Listener → Catches FailedEvent.
+7. ↓ First Failure? → If status = 'pending' and attempt_count = 0:
+8. ↓ Set Retry → Set status = 'pending retry', attempt_count = 1, next_retry_time = now + 15s (future time updated here).
+9. ↓ Retry Failure? → If status = 'pending retry' and attempt_count > 0:
+10. ↓ Check Attempts → If attempt_count < 3:
+11. ↓ Update Retry → attempt_count++, next_retry_time = now + (15s * 2^(attempt_count-1)) (future time updated here).
+12. ↓ Max Attempts? → If attempt_count = 3, set status = 'failed', next_retry_time = null.
+13. ↓ Save → Update record in DB, loop back to scheduler.
+=========================================
 Direct Answer
 Overview
 To handle retries for an external API call without blocking threads for hours, especially with exponential backoff delays (15 minutes initially, doubling to 30, 60 minutes, for up to 3 attempts total), you can use Spring’s TaskScheduler for asynchronous scheduling. This ensures the thread is released immediately after failure, and retries are managed by scheduling tasks at the appropriate times, updating the database for each retry.
