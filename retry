@@ -1,35 +1,39 @@
-public void listen(List<TXELCConfirmationResponse> responses) {
-        System.out.println("Received: " + responses);
+spring:
+  kafka:
+    bootstrap-servers: tp-kafkatxn-service-01.tx.standardchartered.com:9092,tp-kafkatxn-service-02.tx.standardchartered.com:9092,tp-kafkatxn-service-03.tx.standardchartered.com:9092
+    listener:
+      topics: car-topic
+Updated Properties Class
+Nest topics under a Listener subclass and add a getter:
 
-        for (TXELCConfirmationResponse response : responses) {
-            // Build historyMap from response (adjust fields as needed)
-            Map<String, String> historyMap = new HashMap<>();
-            historyMap.put("id", response.getId()); // Example field
-            historyMap.put("status", response.getStatus()); // Example field
+java
 
-            // Call method and wrap in Optional
-            Optional<TXELCConfirmationResponse> result = findEntityWithOptional(historyMap);
+Collapse
 
-            // Handle the result
-            result.ifPresentOrElse(
-                entity -> System.out.println("Found entity: " + entity),
-                () -> System.out.println("No entity found for " + historyMap)
-            );
-        }
+Wrap
+
+Copy
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+@Component
+@ConfigurationProperties(prefix = "spring.kafka")
+public class KafkaProperties {
+    private String bootstrapServers; // Comma-separated string
+    private Listener listener = new Listener();
+
+    public String getBootstrapServers() { return bootstrapServers; }
+    public void setBootstrapServers(String bootstrapServers) { this.bootstrapServers = bootstrapServers; }
+    public Listener getListener() { return listener; }
+    public void setListener(Listener listener) { this.listener = listener; }
+
+    public static class Listener {
+        private String topics;
+
+        public String getTopics() { return topics; }
+        public void setTopics(String topics) { this.topics = topics; }
     }
-
-    // Helper method to wrap the call in Optional
-    private Optional<TXELCConfirmationResponse> findEntityWithOptional(Map<String, String> historyMap) {
-        try {
-            TXELCConfirmationResponse result = findForSingleEntityObject(TXELCConfirmationResponse.class, historyMap);
-            return Optional.ofNullable(result); // Wrap result, handles null if method ever returns it
-        } catch (NoResultException e) {
-            return Optional.empty(); // No result found
-        } catch (Exception e) {
-            System.out.println("Error querying entity for " + historyMap + ": " + e.getMessage());
-            return Optional.empty(); // Handle other exceptions (e.g., NonUniqueResultException)
-        }
-    }
+}
 
 ========================
 1. Start → Scheduler runs every 15 seconds.
