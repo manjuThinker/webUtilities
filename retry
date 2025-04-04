@@ -1,4 +1,37 @@
+public void listen(List<TXELCConfirmationResponse> responses) {
+        System.out.println("Received: " + responses);
 
+        for (TXELCConfirmationResponse response : responses) {
+            // Build historyMap from response (adjust fields as needed)
+            Map<String, String> historyMap = new HashMap<>();
+            historyMap.put("id", response.getId()); // Example field
+            historyMap.put("status", response.getStatus()); // Example field
+
+            // Call method and wrap in Optional
+            Optional<TXELCConfirmationResponse> result = findEntityWithOptional(historyMap);
+
+            // Handle the result
+            result.ifPresentOrElse(
+                entity -> System.out.println("Found entity: " + entity),
+                () -> System.out.println("No entity found for " + historyMap)
+            );
+        }
+    }
+
+    // Helper method to wrap the call in Optional
+    private Optional<TXELCConfirmationResponse> findEntityWithOptional(Map<String, String> historyMap) {
+        try {
+            TXELCConfirmationResponse result = findForSingleEntityObject(TXELCConfirmationResponse.class, historyMap);
+            return Optional.ofNullable(result); // Wrap result, handles null if method ever returns it
+        } catch (NoResultException e) {
+            return Optional.empty(); // No result found
+        } catch (Exception e) {
+            System.out.println("Error querying entity for " + historyMap + ": " + e.getMessage());
+            return Optional.empty(); // Handle other exceptions (e.g., NonUniqueResultException)
+        }
+    }
+
+========================
 1. Start → Scheduler runs every 15 seconds.
 2. ↓ Fetch → Query: Get 'pending' OR 'pending retry' where next_retry_time <= now.
 3. ↓ Process → Attempt to process each record.
