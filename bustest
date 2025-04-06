@@ -1,612 +1,124 @@
-@ExtendWith(MockitoExtension.class)
-class ELCInProgressServiceTest {
-
-    @InjectMocks
-    private ELCInProgressService elcInProgressService;
-
-    @Mock
-    private RestTemplate restTemplate;
-
-    @Mock
-    private FfiMasterCustomRepository ffiMasterCustomRepository;
-    
-    @Mock
-    private CodeDecodeService codeDecodeService;
-    
-    private SCELCMapper scelcMapper;
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(elcInProgressService, "elcInProgressUrl", "http://test-url.com/api");
-        scelcMapper = new SCELCMapper();
-        scelcMapper.setCodeDecodeService(codeDecodeService);
-    }
-
-    @Test
-    void getInProgressdetailsList_Success() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        TxnSummaryResponse response = new TxnSummaryResponse();
-        TxnSummaryResponse.TxnSummary txnSummary = response.new TxnSummary();
-        txnSummary.setCountryCode(TXCountry.of(TXCountryCode.valueOf("SP")));
-        txnSummary.setAttachmentCount(TXBigDecimalValue.of(new BigDecimal(1)));
-        response.setTxnSummary(txnSummary);
-        apiResponseList.add(response);
-
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        TXFFIHistoryDtlsEntity historyEntity1 = createHistoryEntity("abx", "1253", "U44SD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        
-        historyEntities.add(historyEntity);
-        historyEntities.add(historyEntity1);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Sort sort = Sort.by("dealRefNo").ascending()
-                .and(Sort.by("counterPartyName").ascending())
-                .and(Sort.by("customerName").ascending())
-                .and(Sort.by("currency").ascending())
-                .and(Sort.by("amount").ascending())
-                .and(Sort.by("transactionType").ascending())
-                .and(Sort.by("lstStepStatus").ascending())
-                .and(Sort.by("availableBalance").ascending())
-                .and(Sort.by("lastModifiedDatetime").descending())
-                .and(Sort.by("expiryDate").ascending());
-        Pageable pageable = PageRequest.of(0, 10, sort);
-
-        FilterForm filterForm = new FilterForm();
-        filterForm.setLastModDate(Arrays.asList(
-                "2025-03-22T00:00:00Z",
-                "2025-03-22T00:00:00Z"
-        ));
-        filterForm.setExpireDate(Arrays.asList(
-                "2025-03-22T00:00:00Z",
-                "2025-03-22T00:00:00Z"
-        ));
-        filterForm.setLcAmount(Arrays.asList("1000", "2000"));
-        filterForm.setBankRef(List.of("123"));
-        filterForm.setCcy(List.of("USD"));
-        filterForm.setBeneficiaryName(List.of("BeneficiaryA"));
-        filterForm.setApplicantName(List.of("ApplicantA"));
-        filterForm.setLstStepType(List.of("STEP1"));
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithNullFilters() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        TxnSummaryResponse response = new TxnSummaryResponse();
-        TxnSummaryResponse.TxnSummary txnSummary = response.new TxnSummary();
-        txnSummary.setCountryCode(TXCountry.of(TXCountryCode.valueOf("SP")));
-        txnSummary.setAttachmentCount(TXBigDecimalValue.of(new BigDecimal(1)));
-        response.setTxnSummary(txnSummary);
-        apiResponseList.add(response);
-
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Pageable pageable = PageRequest.of(0, 10);
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, null, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithNullSorting() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response with empty list
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(Collections.emptyList());
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        // Create pageable with null sort
-        Pageable pageable = PageRequest.of(0, 10, Sort.unsorted());
-        
-        FilterForm filterForm = new FilterForm();
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithInvalidPageNumber() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        TxnSummaryResponse response = new TxnSummaryResponse();
-        TxnSummaryResponse.TxnSummary txnSummary = response.new TxnSummary();
-        txnSummary.setCountryCode(TXCountry.of(TXCountryCode.valueOf("SP")));
-        txnSummary.setAttachmentCount(TXBigDecimalValue.of(new BigDecimal(1)));
-        response.setTxnSummary(txnSummary);
-        apiResponseList.add(response);
-
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        // Create pageable with a very high page number
-        Pageable pageable = PageRequest.of(100, 10);
-        
-        FilterForm filterForm = new FilterForm();
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-        assertEquals(0, result.getTxElcMasterDtls().size());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithAllFilters() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response with data that matches all filter criteria
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1500);
-        historyEntity.setBeneficiaryName("BeneficiaryA");
-        historyEntity.setApplicantName("ApplicantA");
-        historyEntity.setLastStepType("STEP1");
-        historyEntity.setLastStepStatus("Status1");
-        historyEntity.setAvailableBalance(new BigDecimal("1400"));
-        
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Sort sort = Sort.by("dealRefNo").ascending();
-        Pageable pageable = PageRequest.of(0, 10, sort);
-
-        // Create filter form with all possible filters
-        FilterForm filterForm = new FilterForm();
-        filterForm.setLastModDate(Arrays.asList(
-                "2025-03-21T00:00:00Z",
-                "2025-03-23T00:00:00Z"
-        ));
-        filterForm.setExpireDate(Arrays.asList(
-                "2025-03-21T00:00:00Z",
-                "2025-03-23T00:00:00Z"
-        ));
-        filterForm.setLcAmount(Arrays.asList("1000", "2000"));
-        filterForm.setBankRef(List.of("123"));
-        filterForm.setCcy(List.of("USD"));
-        filterForm.setBeneficiaryName(List.of("BeneficiaryA"));
-        filterForm.setApplicantName(List.of("ApplicantA"));
-        filterForm.setLstStepType(List.of("STEP1"));
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithNullFilterValues() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Pageable pageable = PageRequest.of(0, 10);
-
-        // Create filter form with empty values
-        FilterForm filterForm = new FilterForm();
-        filterForm.setLastModDate(Collections.emptyList());
-        filterForm.setExpireDate(Collections.emptyList());
-        filterForm.setLcAmount(Arrays.asList("", ""));
-        filterForm.setBankRef(Collections.emptyList());
-        filterForm.setCcy(Collections.emptyList());
-        filterForm.setBeneficiaryName(Collections.emptyList());
-        filterForm.setApplicantName(Collections.emptyList());
-        filterForm.setLstStepType(Collections.emptyList());
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.getTransactionStatus());
-    }
-    
-    @Test
-    void getInProgressdetailsList_WithOnlyLcAmountFilter() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1500);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Pageable pageable = PageRequest.of(0, 10);
-
-        // Test different LC amount filter scenarios
-        // 1. Start amount only
-        FilterForm filterForm1 = new FilterForm();
-        filterForm1.setLcAmount(Arrays.asList("1000", ""));
-        
-        TXELCMasterDtlsResponse result1 = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm1, userId, groupId);
-        
-        // 2. End amount only
-        FilterForm filterForm2 = new FilterForm();
-        filterForm2.setLcAmount(Arrays.asList("", "2000"));
-        
-        TXELCMasterDtlsResponse result2 = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm2, userId, groupId);
-        
-        // 3. Both start and end amount
-        FilterForm filterForm3 = new FilterForm();
-        filterForm3.setLcAmount(Arrays.asList("1000", "2000"));
-        
-        TXELCMasterDtlsResponse result3 = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm3, userId, groupId);
-        
-        // 4. Zero start amount
-        FilterForm filterForm4 = new FilterForm();
-        filterForm4.setLcAmount(Arrays.asList("0", "2000"));
-        
-        TXELCMasterDtlsResponse result4 = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm4, userId, groupId);
-
-        // Assert
-        assertNotNull(result1);
-        assertNotNull(result2);
-        assertNotNull(result3);
-        assertNotNull(result4);
-    }
-
-    @Test
-    void getInProgressdetailsList_InvalidDateFormat() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        TXFFIHistoryDtlsEntity historyEntity = createHistoryEntity("CNF", "123", "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000);
-        historyEntities.add(historyEntity);
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        Pageable pageable = PageRequest.of(0, 10);
-
-        // Create filter form with invalid date format
-        FilterForm filterForm = new FilterForm();
-        filterForm.setLastModDate(Arrays.asList(
-                "invalid-date-format",
-                "2025-03-22T00:00:00Z"
-        ));
-        filterForm.setExpireDate(Arrays.asList(
-                "invalid-date-format",
-                "2025-03-22T00:00:00Z"
-        ));
-
-        TXELCMasterDtlsResponse result = elcInProgressService.getInProgressdetailsList(
-                customerCountryMap, pageable, filterForm, userId, groupId);
-
-        // Assert
-        assertNotNull(result);
-    }
-    
-    @Test
-    void getInProgressdetailsList_TestAllSortFields() {
-        when(codeDecodeService.getcodeDescrptionMap()).thenReturn(CodeDecodeTableDataStatic.getCodeDecodeMap());
-
-        // Create test data
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-        
-        // Mock external API response
-        List<TxnSummaryResponse> apiResponseList = new ArrayList<>();
-        ResponseEntity<List<TxnSummaryResponse>> responseEntity =
-                ResponseEntity.ok(apiResponseList);
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(responseEntity);
-
-        // Mock repository response
-        List<TXFFIHistoryDtlsEntity> historyEntities = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            TXFFIHistoryDtlsEntity entity = createHistoryEntity("CNF" + i, "123" + i, "USD", "SNDTOBK", "2025-03-22T00:00:00Z", 1000 + i);
-            entity.setBeneficiaryName("Beneficiary" + i);
-            entity.setApplicantName("Applicant" + i);
-            entity.setLastStepType("Step" + i);
-            entity.setLastStepStatus("Status" + i);
-            entity.setAvailableBalance(new BigDecimal(900 + i));
-            historyEntities.add(entity);
-        }
-
-        when(ffiMasterCustomRepository.findByCustomerIDAndGenericField(
-                eq(TXFFIHistoryDtlsEntity.class),
-                any(Map.class),
-                eq(customerCountryMap)
-        )).thenReturn(historyEntities);
-
-        // Test each sort field individually
-        String[] sortFields = {
-            "dealRefNo", "counterPartyName", "customerName", "currency", "amount", 
-            "transactionType", "lstStepStatus", "availableBalance", "lastModifiedDatetime", 
-            "expiryDate", "unknownField"
-        };
-        
-        for (String field : sortFields) {
-            // Test ascending
-            Sort sortAsc = Sort.by(field).ascending();
-            Pageable pageableAsc = PageRequest.of(0, 10, sortAsc);
-            
-            TXELCMasterDtlsResponse resultAsc = elcInProgressService.getInProgressdetailsList(
-                    customerCountryMap, pageableAsc, null, userId, groupId);
-            
-            // Test descending
-            Sort sortDesc = Sort.by(field).descending();
-            Pageable pageableDesc = PageRequest.of(0, 10, sortDesc);
-            
-            TXELCMasterDtlsResponse resultDesc = elcInProgressService.getInProgressdetailsList(
-                    customerCountryMap, pageableDesc, null, userId, groupId);
-            
-            // Assert
-            assertNotNull(resultAsc);
-            assertNotNull(resultDesc);
-        }
-    }
-
-    @Test
-    void getInProgressdetailsList_Exception() {
-        Map<String, String> customerCountryMap = Map.of("customerId", "AE", "country", "AE");
-        String userId = "user1";
-        String groupId = "group1";
-
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)
-        )).thenThrow(new HttpClientErrorException(HttpStatusCode.valueOf(500)));
-
-        Sort sort = Sort.by("dealRefNo").ascending();
-        Pageable pageable = PageRequest.of(0, 10, sort);
-
-        Exception exception = assertThrows(SCException.class, () -> {
-            elcInProgressService.getInProgressdetailsList(
-                    customerCountryMap, pageable, new FilterForm(), userId, groupId);
-        });
-        // Check that the correct exception message is returned
-        assertEquals("org.springframework.web.client.HttpClientErrorException: 500 INTERNAL_SERVER_ERROR", exception.getMessage());
-    }
-
-    private TXFFIHistoryDtlsEntity createHistoryEntity(String transactionType, String dealRefNo, 
-                                                    String currency, String workflowStatus, 
-                                                    String dateTimeStr, int amount) {
-        TXFFIHistoryDtlsEntity entity = new TXFFIHistoryDtlsEntity();
-        entity.setTransactionType(transactionType);
-        entity.setDealRefNo(dealRefNo);
-        entity.setCurrency(currency);
-        entity.setCustomerWorkflowStatus(workflowStatus);
-        
-        Instant specificDate = Instant.parse(dateTimeStr);
-        entity.setExpiryDate(Timestamp.from(specificDate));
-        entity.setLastModifiedDatetime(Timestamp.from(specificDate));
-        entity.setAmount(new BigDecimal(amount));
-        
-        return entity;
-    }
-    
-    private CombinedInProgressData createMockCombinedData() {
-        CombinedInProgressData data = new CombinedInProgressData();
-        data.setBankRef("RefNo123");
-        data.setBeneficiaryName("TestBeneficiary");
-        data.setApplicantName("TestApplicant");
-        data.setCcy("USD");
-        data.setLcAmount(BigDecimal.valueOf(1000));
-        data.setLstStepType("PROC");
-        data.setLstStepStatus("ACTIVE");
-        data.setAvailableBalance(BigDecimal.valueOf(900));
-        data.setLastModDate(Timestamp.from(Instant.now()));
-        data.setExpireDate(Timestamp.from(Instant.parse("2023-01-01T00:00:00Z")));
-        return data;
-    }
-}
+It sounds like you're using a Kafka version that supports **KRaft mode**, but your configuration files might not be fully set up for KRaft. Let's address this step by step.
+
+### Key Observations:
+1. **Missing `kraft` Folder**: The `kraft` folder and its associated configuration files (e.g., `server.properties`) are specific to KRaft mode. If you don't have the `kraft` folder, it means the Kafka binary you downloaded doesn't include pre-configured KRaft-specific files.
+2. **No Zookeeper**: Since you're using a Kafka version that supports KRaft, you don't need Zookeeper. However, you need to configure Kafka to run in KRaft mode manually.
+
+---
+
+### Solution: Manually Configure Kafka for KRaft Mode
+
+If your Kafka installation doesn't include the `kraft` folder or pre-configured KRaft files, you can create and configure them yourself. Follow these steps:
+
+---
+
+#### **Step 1: Create a KRaft Configuration File**
+You need a `server.properties` file specifically configured for KRaft mode. Create a new file named `kraft-server.properties` in the `config` folder (or wherever your Kafka configuration files are stored). Use the following content as a template:
+
+```properties
+# KRaft Mode Configuration
+process.roles=broker,controller
+node.id=1
+controller.quorum.voters=1@localhost:9093
+listeners=PLAINTEXT://:9092,CONTROLLER://:9093
+advertised.listeners=PLAINTEXT://localhost:9092
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+log.dirs=C:/kafka/data
+num.partitions=1
+default.replication.factor=1
+min.insync.replicas=1
+auto.create.topics.enable=true
+```
+
+**Explanation of Key Parameters**:
+- `process.roles=broker,controller`: Specifies that this node acts as both a broker and a controller (required in KRaft mode).
+- `node.id=1`: A unique ID for this Kafka node (must be unique across the cluster).
+- `controller.quorum.voters=1@localhost:9093`: Defines the quorum voters for the Raft protocol. In a single-node setup, this is just the local node.
+- `listeners=PLAINTEXT://:9092,CONTROLLER://:9093`: Specifies the ports for client communication (`9092`) and controller communication (`9093`).
+- `log.dirs=C:/kafka/data`: Directory where Kafka will store its data. Update this path to a directory on your system (e.g., `C:\kafka\data`).
+
+---
+
+#### **Step 2: Create the Data Directory**
+Ensure the directory specified in `log.dirs` exists. For example:
+```cmd
+mkdir C:\kafka\data
+```
+
+---
+
+#### **Step 3: Generate a Cluster ID**
+Run the following command to generate a unique cluster ID:
+```cmd
+.\bin\windows\kafka-storage.bat random-uuid
+```
+This will output a UUID (e.g., `abc123-xyz456`). Copy this UUID for the next step.
+
+---
+
+#### **Step 4: Format the Storage Directory**
+Use the cluster ID you generated to format the storage directory:
+```cmd
+.\bin\windows\kafka-storage.bat format -t <CLUSTER_ID> -c .\config\kraft-server.properties
+```
+Replace `<CLUSTER_ID>` with the UUID you copied earlier. For example:
+```cmd
+.\bin\windows\kafka-storage.bat format -t abc123-xyz456 -c .\config\kraft-server.properties
+```
+
+---
+
+#### **Step 5: Start Kafka in KRaft Mode**
+Start the Kafka broker using the KRaft configuration file:
+```cmd
+.\bin\windows\kafka-server-start.bat .\config\kraft-server.properties
+```
+This will start Kafka in KRaft mode without requiring Zookeeper. Keep this window open.
+
+---
+
+#### **Step 6: Verify Kafka is Running**
+Open another Command Prompt window and verify that Kafka is working by creating a topic and producing/consuming messages.
+
+1. **Create a Topic**:
+   ```cmd
+   .\bin\windows\kafka-topics.bat --create --topic test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+   ```
+
+2. **Produce Messages**:
+   ```cmd
+   .\bin\windows\kafka-console-producer.bat --topic test-topic --bootstrap-server localhost:9092
+   ```
+   Type some messages (e.g., `Hello Kafka!`) and press `Ctrl+C` to exit.
+
+3. **Consume Messages**:
+   ```cmd
+   .\bin\windows\kafka-console-consumer.bat --topic test-topic --bootstrap-server localhost:9092 --from-beginning
+   ```
+   You should see the messages you produced earlier.
+
+---
+
+### **Summary of Steps**
+1. Create a `kraft-server.properties` file with KRaft-specific settings.
+2. Create the data directory (e.g., `C:\kafka\data`).
+3. Generate a cluster ID:
+   ```cmd
+   .\bin\windows\kafka-storage.bat random-uuid
+   ```
+4. Format the storage directory:
+   ```cmd
+   .\bin\windows\kafka-storage.bat format -t <CLUSTER_ID> -c .\config\kraft-server.properties
+   ```
+5. Start Kafka in KRaft mode:
+   ```cmd
+   .\bin\windows\kafka-server-start.bat .\config\kraft-server.properties
+   ```
+6. Test Kafka by creating a topic, producing messages, and consuming messages.
+
+---
+
+### **Why This Works**
+By manually configuring Kafka for KRaft mode, you bypass the need for the `kraft` folder or Zookeeper. The `kraft-server.properties` file contains all the necessary settings for Kafka to run in KRaft mode.
+
+Let me know if you encounter any issues or need further clarification!
