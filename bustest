@@ -1,124 +1,38 @@
-It sounds like you're using a Kafka version that supports **KRaft mode**, but your configuration files might not be fully set up for KRaft. Let's address this step by step.
+import com.sc.lc.preprocessor.exception.ELCGraphQLException;
+import graphql.execution.DataFetcherResult;
+import graphql.execution.DataFetcherExceptionHandlerParameters;
+import graphql.execution.DataFetcherExceptionHandlerResult;
+import graphql.execution.DataFetchingEnvironment;
+import graphql.execution.ResultPath;
+import graphql.execution.DataFetcherExceptionResolverAdapter;
+import org.springframework.graphql.execution.ErrorType;
+import org.springframework.stereotype.Component;
 
-### Key Observations:
-1. **Missing `kraft` Folder**: The `kraft` folder and its associated configuration files (e.g., `server.properties`) are specific to KRaft mode. If you don't have the `kraft` folder, it means the Kafka binary you downloaded doesn't include pre-configured KRaft-specific files.
-2. **No Zookeeper**: Since you're using a Kafka version that supports KRaft, you don't need Zookeeper. However, you need to configure Kafka to run in KRaft mode manually.
+import java.util.List;
 
----
+@Component
+public class GlobalExceptionHandler extends DataFetcherExceptionResolverAdapter {
 
-### Solution: Manually Configure Kafka for KRaft Mode
+    @Override
+    protected DataFetcherExceptionHandlerResult handleException(DataFetcherExceptionHandlerParameters handlerParameters) {
+        Throwable exception = handlerParameters.getException();
+        DataFetchingEnvironment environment = handlerParameters.getEnvironment();
 
-If your Kafka installation doesn't include the `kraft` folder or pre-configured KRaft files, you can create and configure them yourself. Follow these steps:
+        if (exception instanceof ELCGraphQLException) {
+            ELCGraphQLException elcEx = (ELCGraphQLException) exception;
+            Object responseData = elcEx.getResponse();
 
----
+            // Return a DataFetcherResult with the custom object in the data field
+            DataFetcherResult<Object> result = DataFetcherResult.<Object>newResult()
+                    .data(responseData)
+                    .build();
 
-#### **Step 1: Create a KRaft Configuration File**
-You need a `server.properties` file specifically configured for KRaft mode. Create a new file named `kraft-server.properties` in the `config` folder (or wherever your Kafka configuration files are stored). Use the following content as a template:
+            return DataFetcherExceptionHandlerResult.newResultResult()
+                    .data(result.getData())
+                    .errors(result.getErrors())
+                    .build();
+        }
 
-```properties
-# KRaft Mode Configuration
-process.roles=broker,controller
-node.id=1
-controller.quorum.voters=1@localhost:9093
-listeners=PLAINTEXT://:9092,CONTROLLER://:9093
-advertised.listeners=PLAINTEXT://localhost:9092
-listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-log.dirs=C:/kafka/data
-num.partitions=1
-default.replication.factor=1
-min.insync.replicas=1
-auto.create.topics.enable=true
-```
-
-**Explanation of Key Parameters**:
-- `process.roles=broker,controller`: Specifies that this node acts as both a broker and a controller (required in KRaft mode).
-- `node.id=1`: A unique ID for this Kafka node (must be unique across the cluster).
-- `controller.quorum.voters=1@localhost:9093`: Defines the quorum voters for the Raft protocol. In a single-node setup, this is just the local node.
-- `listeners=PLAINTEXT://:9092,CONTROLLER://:9093`: Specifies the ports for client communication (`9092`) and controller communication (`9093`).
-- `log.dirs=C:/kafka/data`: Directory where Kafka will store its data. Update this path to a directory on your system (e.g., `C:\kafka\data`).
-
----
-
-#### **Step 2: Create the Data Directory**
-Ensure the directory specified in `log.dirs` exists. For example:
-```cmd
-mkdir C:\kafka\data
-```
-
----
-
-#### **Step 3: Generate a Cluster ID**
-Run the following command to generate a unique cluster ID:
-```cmd
-.\bin\windows\kafka-storage.bat random-uuid
-```
-This will output a UUID (e.g., `abc123-xyz456`). Copy this UUID for the next step.
-
----
-
-#### **Step 4: Format the Storage Directory**
-Use the cluster ID you generated to format the storage directory:
-```cmd
-.\bin\windows\kafka-storage.bat format -t <CLUSTER_ID> -c .\config\kraft-server.properties
-```
-Replace `<CLUSTER_ID>` with the UUID you copied earlier. For example:
-```cmd
-.\bin\windows\kafka-storage.bat format -t abc123-xyz456 -c .\config\kraft-server.properties
-```
-
----
-
-#### **Step 5: Start Kafka in KRaft Mode**
-Start the Kafka broker using the KRaft configuration file:
-```cmd
-.\bin\windows\kafka-server-start.bat .\config\kraft-server.properties
-```
-This will start Kafka in KRaft mode without requiring Zookeeper. Keep this window open.
-
----
-
-#### **Step 6: Verify Kafka is Running**
-Open another Command Prompt window and verify that Kafka is working by creating a topic and producing/consuming messages.
-
-1. **Create a Topic**:
-   ```cmd
-   .\bin\windows\kafka-topics.bat --create --topic test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
-   ```
-
-2. **Produce Messages**:
-   ```cmd
-   .\bin\windows\kafka-console-producer.bat --topic test-topic --bootstrap-server localhost:9092
-   ```
-   Type some messages (e.g., `Hello Kafka!`) and press `Ctrl+C` to exit.
-
-3. **Consume Messages**:
-   ```cmd
-   .\bin\windows\kafka-console-consumer.bat --topic test-topic --bootstrap-server localhost:9092 --from-beginning
-   ```
-   You should see the messages you produced earlier.
-
----
-
-### **Summary of Steps**
-1. Create a `kraft-server.properties` file with KRaft-specific settings.
-2. Create the data directory (e.g., `C:\kafka\data`).
-3. Generate a cluster ID:
-   ```cmd
-   .\bin\windows\kafka-storage.bat random-uuid
-   ```
-4. Format the storage directory:
-   ```cmd
-   .\bin\windows\kafka-storage.bat format -t <CLUSTER_ID> -c .\config\kraft-server.properties
-   ```
-5. Start Kafka in KRaft mode:
-   ```cmd
-   .\bin\windows\kafka-server-start.bat .\config\kraft-server.properties
-   ```
-6. Test Kafka by creating a topic, producing messages, and consuming messages.
-
----
-
-### **Why This Works**
-By manually configuring Kafka for KRaft mode, you bypass the need for the `kraft` folder or Zookeeper. The `kraft-server.properties` file contains all the necessary settings for Kafka to run in KRaft mode.
-
-Let me know if you encounter any issues or need further clarification!
+        return super.handleException(handlerParameters);
+    }
+}
