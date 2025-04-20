@@ -1,38 +1,141 @@
-import com.sc.lc.preprocessor.exception.ELCGraphQLException;
-import graphql.execution.DataFetcherResult;
-import graphql.execution.DataFetcherExceptionHandlerParameters;
-import graphql.execution.DataFetcherExceptionHandlerResult;
-import graphql.execution.DataFetchingEnvironment;
-import graphql.execution.ResultPath;
-import graphql.execution.DataFetcherExceptionResolverAdapter;
-import org.springframework.graphql.execution.ErrorType;
-import org.springframework.stereotype.Component;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-import java.util.List;
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ValidateClientHash {
+}
+
+
+================
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 @Component
-public class GlobalExceptionHandler extends DataFetcherExceptionResolverAdapter {
+public class ClientHashInterceptor implements HandlerInterceptor {
+
+    private final ClientHashValidator hashValidator;
+    private final ObjectMapper objectMapper;
+
+    public ClientHashInterceptor(ClientHashValidator hashValidator, ObjectMapper objectMapper) {
+        this.hashValidator = hashValidator;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
-    protected DataFetcherExceptionHandlerResult handleException(DataFetcherExceptionHandlerParameters handlerParameters) {
-        Throwable exception = handlerParameters.getException();
-        DataFetchingEnvironment environment = handlerParameters.getEnvironment();
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // Wrap request to allow multiple reads
+        CustomHttpServletRequestWrapper wrappedRequest = new CustomHttpServletRequestWrapper(request);
 
-        if (exception instanceof ELCGraphQLException) {
-            ELCGraphQLException elcEx = (ELCGraphQLException) exception;
-            Object responseData = elcEx.getResponse();
-
-            // Return a DataFetcherResult with the custom object in the data field
-            DataFetcherResult<Object> result = DataFetcherResult.<Object>newResult()
-                    .data(responseData)
-                    .build();
-
-            return DataFetcherExceptionHandlerResult.newResultResult()
-                    .data(result.getData())
-                    .errors(result.getErrors())
-                    .build();
+        // Check if handler is a controller method with @ValidateClientHash
+        if (!(handler instanceof HandlerMethod)) {
+            return true; // Not a controller method, proceed
+        }
+        HandlerMethod handlerMethod = (HandlerMethod) handler;
+        if (!handlerMethod.hasMethodAnnotation(ValidateClientHash.class)) {
+            return true; // No annotation, proceed
         }
 
-        return super.handleException(handlerParameters);
+        // Log handler method for clarity
+        String methodName = handlerMethod.getMethod().getName();
+        String className = handlerMethod.getBeanType().getSimpleName();
+
+        // Read request body
+        String requestBody = wrappedRequest.getBody();
+        if (requestBody.isEmpty()) {
+            throw new ClientHashValidationException("Request body is empty", HttpStatus.BAD_REQUEST);
+        }
+
+        // Parse JSON
+        JsonNode jsonNode = objectMapper.readTree(requestBody);
+        JsonNode clientHashNode = jsonNode.get("clientHash");
+        if (clientHashNode == null || clientHashNode.isNull()) {
+            throw new ClientHashValidationException("clientHash is missing", HttpStatus.BAD_REQUEST);
+        }
+        String receivedHash = clientHashNode.asText();
+
+        // Validate hash
+        if (!hashValidator.validateHash(jsonNode.deepCopy(), receivedHash)) {
+            throw new ClientHashValidationException("Invalid clientHash for " + className + "." + methodName, HttpStatus.BAD_REQUEST);
+        }
+
+        // Set wrapped request for downstream processing
+        request.setAttribute("wrappedRequest", wrappedRequest);
+        return true;
+    }
+}
+
+==============
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    private final ClientHashInterceptor clientHashInterceptor;
+
+    public WebConfig(ClientHashInterceptor clientHashInterceptor) {
+        this.clientHashInterceptor = clientHashInterceptor;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(clientHashInterceptor);
+    }
+}
+
+==============================
+
+
+import javax.servlet.ReadListener;
+import javax.servlet.ServletInputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+
+public class CustomHttpServletRequestWrapper extends HttpServletRequestWrapper {
+
+    private final ByteArrayInputStream inputStream;
+
+    public CustomHttpServletRequestWrapper(HttpServletRequest request, ByteArrayInputStream inputStream) {
+        super(request);
+        this.inputStream = inputStream;
+    }
+
+    @Override
+    public ServletInputStream getInputStream() throws IOException {
+        return new ServletInputStream() {
+            @Override
+            public boolean isFinished() {
+                return inputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                // No-op
+            }
+
+            @Override
+            public int read() throws IOException {
+                return inputStream.read();
+            }
+        };
     }
 }
