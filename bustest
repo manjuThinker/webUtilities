@@ -329,3 +329,19 @@ public abstract class BaseGraphQlController {
         }
     }
 }
+
+======================
+
+return chain.next(request).doOnNext(response -> {
+            // Get the execution result
+            response.getExecutionResult().ifAvailable(executionResult -> {
+                // Access the handler method through execution context
+                executionResult.getExtensions().ifPresent(extensions -> {
+                    if (extensions.containsKey("handlerMethod")) {
+                        HandlerMethod handler = (HandlerMethod) extensions.get("handlerMethod");
+                        System.out.println("Controller class: " + handler.getBeanType().getSimpleName());
+                        System.out.println("Method name: " + handler.getMethod().getName());
+                    }
+                });
+            });
+        });
