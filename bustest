@@ -1,150 +1,94 @@
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface ValidateClientHash {
-}
+    <!-- Parent Project Info -->
+    <groupId>com.yourcompany</groupId>
+    <artifactId>parent-project</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Parent Project</name>
 
+    <modules>
+        <module>core</module>
+        <module>services</module>
+    </modules>
 
-================
+    <!-- Properties -->
+    <properties>
+        <java.version>17</java.version>
+        <spring-boot.version>3.1.0</spring-boot.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.servlet.HandlerInterceptor;
+    <!-- Dependency Management -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot BOM -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+    <!-- Build Configuration -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
-@Component
-public class ClientHashInterceptor implements HandlerInterceptor {
+    <!-- Profile for Module Activation -->
+    <profiles>
+        <profile>
+            <id>core</id>
+            <activation>
+                <property>
+                    <name>!skipCore</name>
+                </activation>
+            </activation>
+        </profile>
+        <profile>
+            <id>services</id>
+            <activation>
+                <property>
+                    <name>!skipServices</name>
+                </activation>
+            </activation>
+        </profile>
+    </profiles>
+</project>
 
-    private final ClientHashValidator hashValidator;
-    private final ObjectMapper objectMapper;
-
-    public ClientHashInterceptor(ClientHashValidator hashValidator, ObjectMapper objectMapper) {
-        this.hashValidator = hashValidator;
-        this.objectMapper = objectMapper;
-    }
-
-    @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // Wrap request to allow multiple reads
-        CustomHttpServletRequestWrapper wrappedRequest = new CustomHttpServletRequestWrapper(request);
-
-        // Check if handler is a controller method with @ValidateClientHash
-        if (!(handler instanceof HandlerMethod)) {
-            return true; // Not a controller method, proceed
-        }
-        HandlerMethod handlerMethod = (HandlerMethod) handler;
-        if (!handlerMethod.hasMethodAnnotation(ValidateClientHash.class)) {
-            return true; // No annotation, proceed
-        }
-
-        // Log handler method for clarity
-        String methodName = handlerMethod.getMethod().getName();
-        String className = handlerMethod.getBeanType().getSimpleName();
-
-        // Read request body
-        String requestBody = wrappedRequest.getBody();
-        if (requestBody.isEmpty()) {
-            throw new ClientHashValidationException("Request body is empty", HttpStatus.BAD_REQUEST);
-        }
-
-        // Parse JSON
-        JsonNode jsonNode = objectMapper.readTree(requestBody);
-        JsonNode clientHashNode = jsonNode.get("clientHash");
-        if (clientHashNode == null || clientHashNode.isNull()) {
-            throw new ClientHashValidationException("clientHash is missing", HttpStatus.BAD_REQUEST);
-        }
-        String receivedHash = clientHashNode.asText();
-
-        // Validate hash
-        if (!hashValidator.validateHash(jsonNode.deepCopy(), receivedHash)) {
-            throw new ClientHashValidationException("Invalid clientHash for " + className + "." + methodName, HttpStatus.BAD_REQUEST);
-        }
-
-        // Set wrapped request for downstream processing
-        request.setAttribute("wrappedRequest", wrappedRequest);
-        return true;
-    }
-}
-
-==============
-
-import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-@Configuration
-public class WebConfig implements WebMvcConfigurer {
-
-    private final ClientHashInterceptor clientHashInterceptor;
-
-    public WebConfig(ClientHashInterceptor clientHashInterceptor) {
-        this.clientHashInterceptor = clientHashInterceptor;
-    }
-
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(clientHashInterceptor);
-    }
-}
-
-==============================
+...
 
 
-import javax.servlet.ReadListener;
-import javax.servlet.ServletInputStream;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 
-public class CustomHttpServletRequestWrapper extends HttpServletRequestWrapper {
 
-    private final ByteArrayInputStream inputStream;
 
-    public CustomHttpServletRequestWrapper(HttpServletRequest request, ByteArrayInputStream inputStream) {
-        super(request);
-        this.inputStream = inputStream;
-    }
 
-    @Override
-    public ServletInputStream getInputStream() throws IOException {
-        return new ServletInputStream() {
-            @Override
-            public boolean isFinished() {
-                return inputStream.available() == 0;
-            }
 
-            @Override
-            public boolean isReady() {
-                return true;
-            }
 
-            @Override
-            public void setReadListener(ReadListener readListener) {
-                // No-op
-            }
 
-            @Override
-            public int read() throws IOException {
-                return inputStream.read();
-            }
-        };
-    }
-}
 
-===========
-
-import javax.servlet.ReadListener;
-import javax.servlet.ServletInputStream;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 import java.io.*;
 
