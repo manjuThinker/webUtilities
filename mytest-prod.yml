@@ -25,8 +25,283 @@
 
 
 
-<field name="applicantDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
-<field name="beneficaryDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<!-- Party Details Objects -->
 <field name="advisingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
 <field name="confirmingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="beneficaryDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="applicantDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
 <field name="nominatedBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+
+<!-- Transaction and Reference Fields -->
+<field name="transactionSuccess" class="java.lang.String"/>
+<field name="dtpCustomerId" class="java.lang.String"/>
+<field name="bankLCReference" class="java.lang.String"/>
+<field name="companyReference" class="java.lang.String"/>
+<field name="amendmentDate" class="java.lang.String"/>
+<field name="stepRecId" class="java.lang.String"/>
+<field name="country" class="java.lang.String"/>
+<field name="countryCode" class="java.lang.String"/>
+
+<!-- Description Fields -->
+<field name="goodsDescription" class="java.lang.String"/>
+<field name="documentsRequired" class="java.lang.String"/>
+<field name="additionalConditionsDescription" class="java.lang.String"/>
+<field name="customerInstructions" class="java.lang.String"/>
+
+<!-- Available With/By Fields -->
+<field name="availableWithId" class="java.lang.String"/>
+<field name="availableWithValue" class="java.lang.String"/>
+<field name="availableById" class="java.lang.String"/>
+<field name="availableByValue" class="java.lang.String"/>
+
+<!-- Shipment Related Fields -->
+<field name="modeofShipmentId" class="java.lang.String"/>
+<field name="modeofShipmentValue" class="java.lang.String"/>
+<field name="partialShipmentId" class="java.lang.String"/>
+<field name="partialShipmentValue" class="java.lang.String"/>
+<field name="transhipmentId" class="java.lang.String"/>
+<field name="transhipmentValue" class="java.lang.String"/>
+<field name="shipmentTimeframeId" class="java.lang.String"/>
+<field name="shipmentTimeframeValue" class="java.lang.String"/>
+<field name="latestShipmentDate" class="java.lang.String"/>
+<field name="shipFrom" class="java.lang.String"/>
+<field name="shipTo" class="java.lang.String"/>
+<field name="placeofReceipt" class="java.lang.String"/>
+<field name="placeofDelivery" class="java.lang.String"/>
+<field name="shipmentPeriod" class="java.lang.String"/>
+
+<!-- Charges Related Fields -->
+<field name="chargeTypeId" class="java.lang.String"/>
+<field name="chargeTypeValue" class="java.lang.String"/>
+<field name="issuanceChargesId" class="java.lang.String"/>
+<field name="issuanceChargesValue" class="java.lang.String"/>
+<field name="advisingChargesId" class="java.lang.String"/>
+<field name="advisingChargesValue" class="java.lang.String"/>
+<field name="reimbursingBankChargesId" class="java.lang.String"/>
+<field name="reimbursingBankChargesValue" class="java.lang.String"/>
+<field name="discrepancyChargesId" class="java.lang.String"/>
+<field name="discrepancyChargesValue" class="java.lang.String"/>
+<field name="confirmationBankChargesId" class="java.lang.String"/>
+<field name="confirmationBankChargesValue" class="java.lang.String"/>
+<field name="reimbursementRemittanceChargesId" class="java.lang.String"/>
+<field name="reimbursementRemittanceChargesValue" class="java.lang.String"/>
+<field name="accountNoChargesId" class="java.lang.String"/>
+<field name="accountNoChargesValue" class="java.lang.String"/>
+<field name="fxChargesId" class="java.lang.String"/>
+<field name="fxChargesValue" class="java.lang.String"/>
+<field name="chargesDetails" class="java.lang.String"/>
+<field name="amendmentChargesId" class="java.lang.String"/>
+<field name="amendmentChargesValue" class="java.lang.String"/>
+
+<!-- Beneficiary and Bank Related Fields -->
+<field name="beneficiaryRelatedPartyId" class="java.lang.String"/>
+<field name="beneficiaryRelatedPartyValue" class="java.lang.String"/>
+<field name="beneficiaryId" class="java.lang.String"/>
+<field name="beneficiaryValue" class="java.lang.String"/>
+<field name="advisingBankId" class="java.lang.String"/>
+<field name="advisingBankValue" class="java.lang.String"/>
+
+<!-- FX Related Fields -->
+<field name="fxContractNo" class="java.lang.String"/>
+<field name="fxRate" class="java.lang.String"/>
+
+<!-- LC Configuration Fields -->
+<field name="transferableLCId" class="java.lang.String"/>
+<field name="transferableLCValue" class="java.lang.String"/>
+<field name="sustainableFinanceTransactionId" class="java.lang.String"/>
+<field name="sustainableFinanceTransactionValue" class="java.lang.String"/>
+<field name="lcTypeId" class="java.lang.String"/>
+<field name="lcTypeValue" class="java.lang.String"/>
+<field name="exportLcReferenceId" class="java.lang.String"/>
+<field name="exportLcReferenceValue" class="java.lang.String"/>
+<field name="confirmationToggleId" class="java.lang.String"/>
+<field name="confirmationToggleValue" class="java.lang.String"/>
+
+<!-- Reimbursement Fields -->
+<field name="reimbursementInstruction" class="java.lang.String"/>
+<field name="ttReimbursementAllowed" class="java.lang.String"/>
+<field name="sentById" class="java.lang.String"/>
+<field name="sentByValue" class="java.lang.String"/>
+
+<!-- Amount Related Fields -->
+<field name="amount" class="java.lang.String"/>
+<field name="lcAmountCCYId" class="java.lang.String"/>
+<field name="lcAmountCCYValue" class="java.lang.String"/>
+<field name="additionalAmounts" class="java.lang.String"/>
+<field name="additionalAmountDesc" class="java.lang.String"/>
+<field name="lcAddtionalAmountCCYId" class="java.lang.String"/>
+<field name="lcAddtionalAmountCCYValue" class="java.lang.String"/>
+
+<!-- Tolerance Fields -->
+<field name="toleranceToggleId" class="java.lang.String"/>
+<field name="toleranceToggleValue" class="java.lang.String"/>
+<field name="variancePlus" class="java.lang.String"/>
+<field name="varianceMinus" class="java.lang.String"/>
+
+<!-- Incoterms Fields -->
+<field name="incotermYearId" class="java.lang.String"/>
+<field name="incotermYearValue" class="java.lang.String"/>
+<field name="incotermsYearValueId" class="java.lang.String"/>
+<field name="incotermsYearValueValue" class="java.lang.String"/>
+<field name="incotermDetailsId" class="java.lang.String"/>
+<field name="incotermDetailsValue" class="java.lang.String"/>
+
+<!-- Tenor Related Fields -->
+<field name="tenorDays" class="java.lang.String"/>
+<field name="tenorTypeToggleId" class="java.lang.String"/>
+<field name="tenorTypeToggleValue" class="java.lang.String"/>
+<field name="presentationDays" class="java.lang.String"/>
+<field name="daysOfPresentationFromId" class="java.lang.String"/>
+<field name="daysOfPresentationFromValue" class="java.lang.String"/>
+<field name="tenordraftAtId" class="java.lang.String"/>
+<field name="tenordraftAtValue" class="java.lang.String"/>
+<field name="tenordraftAtDetails" class="java.lang.String"/>
+<field name="mixedPaymentDetails" class="java.lang.String"/>
+<field name="daysOfPresentationFromDetails" class="java.lang.String"/>
+
+<!-- Expiry Related Fields -->
+<field name="expiryPlaceId" class="java.lang.String"/>
+<field name="expiryPlaceValue" class="java.lang.String"/>
+<field name="otherExpiryPlace" class="java.lang.String"/>
+<field name="expiryDate" class="java.lang.String"/>
+
+<!-- Amendment Request Fields -->
+<field name="purposeOfRequestId" class="java.lang.String"/>
+<field name="purposeOfRequestValue" class="java.lang.String"/>
+<field name="natureOfChangeId" class="java.lang.String"/>
+<field name="natureOfChangeValue" class="java.lang.String"/>
+<field name="requestBeneConsentId" class="java.lang.String"/>
+<field name="requestBeneConsentValue" class="java.lang.String"/>
+<field name="amountChangeId" class="java.lang.String"/>
+<field name="amountChangeValue" class="java.lang.String"/>
+
+<!-- NEW Fields (Amendment Changes) -->
+<field name="newConfirmationToggleId" class="java.lang.String"/>
+<field name="newConfirmationToggleValue" class="java.lang.String"/>
+<field name="newGoodsDescription" class="java.lang.String"/>
+<field name="newDocumentsRequired" class="java.lang.String"/>
+<field name="newAdditionalConditionsDescription" class="java.lang.String"/>
+<field name="newCustomerInstructions" class="java.lang.String"/>
+<field name="newAvailableWithId" class="java.lang.String"/>
+<field name="newAvailableWithValue" class="java.lang.String"/>
+<field name="newAvailableById" class="java.lang.String"/>
+<field name="newAvailableByValue" class="java.lang.String"/>
+<field name="newModeofShipmentId" class="java.lang.String"/>
+<field name="newModeofShipmentValue" class="java.lang.String"/>
+<field name="newPartialShipmentId" class="java.lang.String"/>
+<field name="newPartialShipmentValue" class="java.lang.String"/>
+<field name="newTranshipmentId" class="java.lang.String"/>
+<field name="newTranshipmentValue" class="java.lang.String"/>
+<field name="newShipmentTimeframeId" class="java.lang.String"/>
+<field name="newShipmentTimeframeValue" class="java.lang.String"/>
+<field name="newChargeTypeId" class="java.lang.String"/>
+<field name="newChargeTypeValue" class="java.lang.String"/>
+<field name="newIssuanceChargesId" class="java.lang.String"/>
+<field name="newIssuanceChargesValue" class="java.lang.String"/>
+<field name="newAdvisingChargesId" class="java.lang.String"/>
+<field name="newAdvisingChargesValue" class="java.lang.String"/>
+<field name="newReimbursingBankChargesId" class="java.lang.String"/>
+<field name="newReimbursingBankChargesValue" class="java.lang.String"/>
+<field name="newDiscrepancyChargesId" class="java.lang.String"/>
+<field name="newDiscrepancyChargesValue" class="java.lang.String"/>
+<field name="newConfirmationBankChargesId" class="java.lang.String"/>
+<field name="newConfirmationBankChargesValue" class="java.lang.String"/>
+<field name="newReimbursementRemittanceChargesId" class="java.lang.String"/>
+<field name="newReimbursementRemittanceChargesValue" class="java.lang.String"/>
+<field name="newBeneficiaryRelatedPartyId" class="java.lang.String"/>
+<field name="newBeneficiaryRelatedPartyValue" class="java.lang.String"/>
+<field name="newLatestShipmentDate" class="java.lang.String"/>
+<field name="newShipFrom" class="java.lang.String"/>
+<field name="newShipTo" class="java.lang.String"/>
+<field name="newPlaceofReceipt" class="java.lang.String"/>
+<field name="newPlaceofDelivery" class="java.lang.String"/>
+<field name="newTransferableLCId" class="java.lang.String"/>
+<field name="newTransferableLCValue" class="java.lang.String"/>
+<field name="newReimbursementInstruction" class="java.lang.String"/>
+<field name="newTtReimbursementAllowed" class="java.lang.String"/>
+<field name="newAdditionalAmounts" class="java.lang.String"/>
+<field name="newAdditionalAmountDesc" class="java.lang.String"/>
+<field name="newToleranceToggleId" class="java.lang.String"/>
+<field name="newToleranceToggleValue" class="java.lang.String"/>
+<field name="newVariancePlus" class="java.lang.String"/>
+<field name="newVarianceMinus" class="java.lang.String"/>
+<field name="newIncotermYearId" class="java.lang.String"/>
+<field name="newIncotermYearValue" class="java.lang.String"/>
+<field name="newIncotermsYearValueId" class="java.lang.String"/>
+<field name="newIncotermsYearValueValue" class="java.lang.String"/>
+<field name="newTenorDays" class="java.lang.String"/>
+<field name="newTenorTypeToggleId" class="java.lang.String"/>
+<field name="newTenorTypeToggleValue" class="java.lang.String"/>
+<field name="newPresentationDays" class="java.lang.String"/>
+<field name="newDaysOfPresentationFromId" class="java.lang.String"/>
+<field name="newDaysOfPresentationFromValue" class="java.lang.String"/>
+<field name="newTenordraftAtId" class="java.lang.String"/>
+<field name="newTenordraftAtValue" class="java.lang.String"/>
+<field name="newExpiryPlaceId" class="java.lang.String"/>
+<field name="newExpiryPlaceValue" class="java.lang.String"/>
+<field name="newOtherExpiryPlace" class="java.lang.String"/>
+<field name="newChargesDetails" class="java.lang.String"/>
+<field name="newShipmentPeriod" class="java.lang.String"/>
+<field name="newTenordraftAtDetails" class="java.lang.String"/>
+<field name="newMixedPaymentDetails" class="java.lang.String"/>
+<field name="newDaysOfPresentationFromDetails" class="java.lang.String"/>
+<field name="newCompanyReference" class="java.lang.String"/>
+
+<!-- Attachments -->
+<field name="uploadAttachments" class="java.util.List"/>
+
+<!-- StrikeThrough Boolean Fields -->
+<field name="isConfirmationToggleStrikeThrough" class="java.lang.Boolean"/>
+<field name="isGoodsDescriptionStrikeThrough" class="java.lang.Boolean"/>
+<field name="isDocumentsRequiredStrikeThrough" class="java.lang.Boolean"/>
+<field name="isAdditionalConditionsDescriptionStrikeThrough" class="java.lang.Boolean"/>
+<field name="isCustomerInstructionsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isAvailableWithStrikeThrough" class="java.lang.Boolean"/>
+<field name="isAvailableByStrikeThrough" class="java.lang.Boolean"/>
+<field name="isModeofShipmentStrikeThrough" class="java.lang.Boolean"/>
+<field name="isPartialShipmentStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTranshipmentStrikeThrough" class="java.lang.Boolean"/>
+<field name="isShipmentTimeframeStrikeThrough" class="java.lang.Boolean"/>
+<field name="isChargeTypeStrikeThrough" class="java.lang.Boolean"/>
+<field name="isIssuanceChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isAdvisingChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isReimbursingBankChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isDiscrepancyChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isConfirmationBankChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isReimbursementRemittanceChargesStrikeThrough" class="java.lang.Boolean"/>
+<field name="isBeneficiaryRelatedPartyStrikeThrough" class="java.lang.Boolean"/>
+<field name="isLatestShipmentDateStrikeThrough" class="java.lang.Boolean"/>
+<field name="isShipFromStrikeThrough" class="java.lang.Boolean"/>
+<field name="isShipToStrikeThrough" class="java.lang.Boolean"/>
+<field name="isPlaceofReceiptStrikeThrough" class="java.lang.Boolean"/>
+<field name="isPlaceofDeliveryStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTransferableLCStrikeThrough" class="java.lang.Boolean"/>
+<field name="isReimbursementInstructionStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTtReimbursementAllowedStrikeThrough" class="java.lang.Boolean"/>
+<field name="isAdditionalAmountsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isToleranceToggleStrikeThrough" class="java.lang.Boolean"/>
+<field name="isVariancePlusStrikeThrough" class="java.lang.Boolean"/>
+<field name="isVarianceMinusStrikeThrough" class="java.lang.Boolean"/>
+<field name="isIncotermYearStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTenorDaysStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTenorTypeToggleStrikeThrough" class="java.lang.Boolean"/>
+<field name="isPresentationDaysStrikeThrough" class="java.lang.Boolean"/>
+<field name="isDaysOfPresentationFromStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTenordraftAtStrikeThrough" class="java.lang.Boolean"/>
+<field name="isExpiryPlaceStrikeThrough" class="java.lang.Boolean"/>
+<field name="isOtherExpiryPlaceStrikeThrough" class="java.lang.Boolean"/>
+<field name="isChargesDetailsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isShipmentPeriodStrikeThrough" class="java.lang.Boolean"/>
+<field name="isTenordraftAtDetailsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isMixedPaymentDetailsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isDaysOfPresentationFromDetailsStrikeThrough" class="java.lang.Boolean"/>
+<field name="isCompanyReferenceStrikeThrough" class="java.lang.Boolean"/>
+
+<!-- Audit Fields -->
+<field name="actionList" class="java.lang.String"/>
+<field name="lastModifiedBy" class="java.lang.String"/>
+<field name="lastModifiedTime" class="java.lang.String"/>
+<field name="createdBy" class="java.lang.String"/>
+<field name="createdDatetime" class="java.lang.String"/>
+<field name="repairRejectReason" class="java.lang.String"/>
+
