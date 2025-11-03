@@ -1,20 +1,32 @@
-# mytest_prod.yml
-app:
-  name: "My Test Application"
-  version: "1.0.0"
-  description: "This is a dummy configuration for production environment gateway."
+<subreport isUsingCache="true">
+	<reportElement key="partydetails" positionType="Float" x="1" y="4" width="494" height="8" isRemoveLineWhenBlank="true" uuid="568eba02-7ed9-4b5a-bb7a-a9613b7b61a0"/>
+	<subreportParameter name="P_SUBREPORT_DIR">
+		<subreportParameterExpression><![CDATA[$P{P_SUBREPORT_DIR}]]></subreportParameterExpression>
+	</subreportParameter>
+	<subreportParameter name="applicantDetails">
+		<subreportParameterExpression><![CDATA[$F{applicantDetails}]]></subreportParameterExpression>
+	</subreportParameter>
+	<subreportParameter name="beneficaryDetails">
+		<subreportParameterExpression><![CDATA[$F{beneficaryDetails}]]></subreportParameterExpression>
+	</subreportParameter>
+	<subreportParameter name="advisingBankDetails">
+		<subreportParameterExpression><![CDATA[$F{advisingBankDetails}]]></subreportParameterExpression>
+	</subreportParameter>
+	<subreportParameter name="confirmingBankDetails">
+		<subreportParameterExpression><![CDATA[$F{confirmingBankDetails}]]></subreportParameterExpression>
+	</subreportParameter>
+	<subreportParameter name="nominatedBankDetails">
+		<subreportParameterExpression><![CDATA[$F{nominatedBankDetails}]]></subreportParameterExpression>
+	</subreportParameter>
+	<dataSourceExpression><![CDATA[new JREmptyDataSource()]]></dataSourceExpression>
+	<subreportExpression><![CDATA[$P{P_SUBREPORT_DIR} + "TTI6010LCAmd_PartyDetails.jasper"]]></subreportExpression>
+</subreport>
 
-database:
-  url: "jdbc:mysql://localhost:3306/mydb"
-  username: "root"
-  password: "password"
 
-features:
-  enabled: true
-  maxUsers: 100
-  timeout: 5000
 
-logging:
-  level:
-    root: "INFO"
-    com.example: "DEBUG"
+
+<field name="applicantDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="beneficaryDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="advisingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="confirmingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+<field name="nominatedBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
