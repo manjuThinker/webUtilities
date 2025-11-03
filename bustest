@@ -1,334 +1,523 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <!-- Parent Project Info -->
-    <groupId>com.yourcompany</groupId>
-    <artifactId>parent-project</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-    <packaging>pom</packaging>
-    <name>Parent Project</name>
-
-    <modules>
-        <module>core</module>
-        <module>services</module>
-    </modules>
-
-    <!-- Properties -->
-    <properties>
-        <java.version>17</java.version>
-        <spring-boot.version>3.1.0</spring-boot.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
-    <!-- Dependency Management -->
-    <dependencyManagement>
-        <dependencies>
-            <!-- Spring Boot BOM -->
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
-    <!-- Build Configuration -->
-    <build>
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-maven-plugin</artifactId>
-                    <version>${spring-boot.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.11.0</version>
-                </plugin>
-            </plugins>
-        </pluginManagement>
-    </build>
-
-    <!-- Profile for Module Activation -->
-    <profiles>
-        <profile>
-            <id>core</id>
-            <activation>
-                <property>
-                    <name>!skipCore</name>
-                </activation>
-            </activation>
-        </profile>
-        <profile>
-            <id>services</id>
-            <activation>
-                <property>
-                    <name>!skipServices</name>
-                </activation>
-            </activation>
-        </profile>
-    </profiles>
-</project>
-
-...
-
-
-
-
-
-
-
-
-
-
-import javax.servlet.http.HttpServletRequestWrapper;
-import java.io.*;
-
-public class CustomHttpServletRequestWrapper extends HttpServletRequestWrapper {
-
-    private final byte[] body;
-
-    public CustomHttpServletRequestWrapper(HttpServletRequest request) throws IOException {
-        super(request);
-        // Read and buffer the request body
-        StringBuilder stringBuilder = new StringBuilder();
-        try (BufferedReader reader = request.getReader()) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stringBuilder.append(line);
-            }
-        }
-        body = stringBuilder.toString().getBytes("UTF-8");
-    }
-
-    @Override
-    public ServletInputStream getInputStream() throws IOException {
-        final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(body);
-        return new ServletInputStream() {
-            @Override
-            public boolean isFinished() {
-                return byteArrayInputStream.available() == 0;
-            }
-
-            @Override
-            public boolean isReady() {
-                return true;
-            }
-
-            @Override
-            public void setReadListener(ReadListener readListener) {
-                // No-op
-            }
-
-            @Override
-            public int read() throws IOException {
-                return byteArrayInputStream.read();
-            }
-        };
-    }
-
-    @Override
-    public BufferedReader getReader() throws IOException {
-        return new BufferedReader(new InputStreamReader(getInputStream()));
-    }
-
-    public String getBody() {
-        return new String(body, StandardCharsets.UTF_8);
-    }
-}
-
-===========================
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import graphql.schema.DataFetcher;
-import org.springframework.graphql.server.WebGraphQlInterceptor;
-import org.springframework.graphql.server.WebGraphQlRequest;
-import org.springframework.graphql.server.WebGraphQlResponse;
-import org.springframework.stereotype.Component;
-
-import java.lang.reflect.Method;
-import java.util.UUID;
-
-@Component
-public class ClientHashWebGraphQlInterceptor implements WebGraphQlInterceptor {
-
-    private final ClientHashValidator hashValidator;
-    private final ObjectMapper objectMapper;
-
-    public ClientHashWebGraphQlInterceptor(ClientHashValidator hashValidator, ObjectMapper objectMapper) {
-        this.hashValidator = hashValidator;
-        this.objectMapper = objectMapper;
-    }
-
-    @Override
-    public WebGraphQlResponse intercept(WebGraphQlRequest request, Chain chain) {
-        String requestId = UUID.randomUUID().toString();
-        request.getAttributes().put("requestId", requestId);
-
-        // Get request body
-        CustomHttpServletRequestWrapper wrappedRequest;
-        try {
-            wrappedRequest = new CustomHttpServletRequestWrapper(request.getHttpRequest());
-        } catch (Exception e) {
-            throw new ClientHashValidationException("Failed to read request body: " + e.getMessage(), HttpStatus.BAD_REQUEST);
-        }
-
-        String requestBody = wrappedRequest.getBody();
-        if (requestBody.isEmpty()) {
-            throw new ClientHashValidationException("Request body is empty (ID: " + requestId + ")", HttpStatus.BAD_REQUEST);
-        }
-
-        // Check if any operation targets a method with @ValidateClientHash
-        boolean requiresValidation = request.getDocumentInfo().getOperations().stream()
-                .anyMatch(op -> {
-                    String fieldName = op.getName();
-                    DataFetcher<?> dataFetcher = request.getExecutionInput().getGraphQLContext()
-                            .get("dataFetcher:" + fieldName);
-                    if (dataFetcher != null) {
-                        try {
-                            Method method = dataFetcher.getClass().getMethod("get", DataFetchingEnvironment.class);
-                            return method.isAnnotationPresent(ValidateClientHash.class);
-                        } catch (NoSuchMethodException e) {
-                            return false;
-                        }
-                    }
-                    return false;
-                });
-
-        if (!requiresValidation) {
-            return chain.next(request);
-        }
-
-        // Validate clientHash
-        try {
-            hashValidator.validateHash(objectMapper.readTree(requestBody));
-        } catch (ClientHashValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ClientHashValidationException("Validation error: " + e.getMessage(), HttpStatus.BAD_REQUEST);
-        }
-
-        return chain.next(request);
-    }
-}
-
-======================
-
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-
-import javax.servlet.http.HttpServletRequest;
-import java.util.UUID;
-
-public abstract class BaseGraphQlController {
-
-    private final ClientHashValidator hashValidator;
-    private final ObjectMapper objectMapper;
-
-    protected BaseGraphQlController(ClientHashValidator hashValidator, ObjectMapper objectMapper) {
-        this.hashValidator = hashValidator;
-        this.objectMapper = objectMapper;
-    }
-
-    protected void validateClientHash() throws ClientHashValidationException {
-        String uuid = UUID.randomUUID().toString();
-
-        // Get HttpServletRequest
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes == null) {
-            throw new ClientHashValidationException("HttpServletRequest not available (ID: " + uuid + ")", HttpStatus.BAD_REQUEST);
-        }
-        HttpServletRequest httpRequest = attributes.getRequest();
-
-        // Wrap request body
-        CustomHttpServletRequestWrapper wrappedRequest;
-        try {
-            wrappedRequest = new CustomHttpServletRequestWrapper(httpRequest);
-        } catch (Exception e) {
-            throw new ClientHashValidationException("Failed to read request body: " + e.getMessage() + " (ID: " + uuid + ")", HttpStatus.BAD_REQUEST);
-        }
-
-        String requestBody = wrappedRequest.getBody();
-        if (requestBody.isEmpty()) {
-            throw new ClientHashValidationException("Request body is empty (ID: " + uuid + ")", HttpStatus.BAD_REQUEST);
-        }
-
-        // Validate clientHash
-        try {
-            hashValidator.validateHash(objectMapper.readTree(requestBody));
-        } catch (ClientHashValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ClientHashValidationException("Validation error: " + e.getMessage() + " (ID: " + uuid + ")", HttpStatus.BAD_REQUEST);
-        }
-    }
-}
-
-======================
-
-return chain.next(request).doOnNext(response -> {
-            // Get the execution result
-            response.getExecutionResult().ifAvailable(executionResult -> {
-                // Access the handler method through execution context
-                executionResult.getExtensions().ifPresent(extensions -> {
-                    if (extensions.containsKey("handlerMethod")) {
-                        HandlerMethod handler = (HandlerMethod) extensions.get("handlerMethod");
-                        System.out.println("Controller class: " + handler.getBeanType().getSimpleName());
-                        System.out.println("Method name: " + handler.getMethod().getName());
-                    }
-                });
-            });
-        });
-
-====================
-import graphql.execution.instrumentation.InstrumentationContext;
-import graphql.execution.instrumentation.SimpleInstrumentation;
-import graphql.execution.instrumentation.parameters.InstrumentationExecuteOperationParameters;
-import org.springframework.graphql.data.method.HandlerMethod;
-import org.springframework.stereotype.Component;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-@Component
-public class PreExecutionMethodInstrumentation extends SimpleInstrumentation {
-    
-    private static final Map<String, HandlerMethod> executionHandlers = new ConcurrentHashMap<>();
-
-    @Override
-    public InstrumentationContext<ExecutionResult> beginExecuteOperation(InstrumentationExecuteOperationParameters parameters) {
-        // This is called before operation execution starts
-        parameters.getExecutionContext().getDataFetchers().values().stream()
-            .filter(HandlerMethod.class::isInstance)
-            .findFirst()
-            .ifPresent(handler -> {
-                executionHandlers.put(
-                    parameters.getExecutionInput().getExecutionId().toString(),
-                    (HandlerMethod) handler
-                );
-            });
-        
-        return super.beginExecuteOperation(parameters);
-    }
-
-    public static HandlerMethod getHandlerForExecution(String executionId) {
-        return executionHandlers.get(executionId);
-    }
-
-    @Override
-    public InstrumentationContext<Object> beginFieldFetch(InstrumentationFieldFetchParameters parameters) {
-        // Clean up after field execution
-        return super.beginFieldFetch(parameters).whenComplete((result, ex) -> {
-            executionHandlers.remove(parameters.getExecutionStepInfo().getExecutionId().toString());
-        });
-    }
-}
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="TTI6010LCAmd_PartyDetails" pageWidth="495" pageHeight="842" whenNoDataType="NoPages" columnWidth="495" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" scriptletClass="com.scb.tradeti.util.ReportScriptlet" resourceBundle="i18n" whenResourceMissingType="Empty" uuid="8fbb6b8e-1839-47f0-be71-609aa3c1a2be">
+	<property name="ireport.zoom" value="2.0"/>
+	<property name="ireport.x" value="0"/>
+	<property name="ireport.y" value="0"/>
+	<property name="ireport.scriptlethandling" value="0"/>
+	<property name="ireport.encoding" value="UTF-8"/>
+	<import value="net.sf.jasperreports.engine.*"/>
+	<import value="java.util.*"/>
+	<import value="net.sf.jasperreports.engine.data.*"/>
+	<import value="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse"/>
+	<style name="TradeTI-Data" isDefault="true" isBlankWhenNull="true" fontName="Arial" fontSize="8" pdfFontName="ARIALUNI.TTF"/>
+	<style name="TradeTI-Label" mode="Opaque" backcolor="#F5F6F6" markup="styled" isBlankWhenNull="true" fontName="Arial" fontSize="8" pdfFontName="ARIALUNI.TTF"/>
+	<parameter name="P_SUBREPORT_DIR" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse" isForPrompting="false"/>
+	<parameter name="confirmingBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse" isForPrompting="false"/>
+	<parameter name="beneficaryDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse" isForPrompting="false"/>
+	<parameter name="applicantDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse" isForPrompting="false"/>
+	<parameter name="nominatedBankDetails" class="com.sc.lc.preprocessor.model.lcIssuance.PartyDetailsResponse" isForPrompting="false"/>
+	<group name="LC">
+		<groupExpression><![CDATA[]]></groupExpression>
+		<groupHeader>
+			<band height="264" splitType="Stretch">
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" x="1" y="0" width="398" height="21" uuid="443c81c8-01fb-429f-9642-1cd08f13ef55"/>
+					<textElement verticalAlignment="Top">
+						<font size="10" isBold="true"/>
+					</textElement>
+					<textFieldExpression><![CDATA["1. "+$R{text.partydetails}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Applicant Name -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="21" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="ef68e2b0-2b38-4884-aae9-b9c53dff152e"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantName}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="21" width="138" height="20" uuid="443c81c8-01fb-429f-9642-1cd08f13ef55"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantDetails} != null && $P{applicantDetails}.getPtyName() != null ? $P{applicantDetails}.getPtyName() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Applicant ID -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="21" width="111" height="20" backcolor="#F5F6F6" uuid="ef68e2b0-2b38-4884-aae9-b9c53dff152e"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantID}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="21" width="138" height="20" uuid="443c81c8-01fb-429f-9642-1cd08f13ef55"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantDetails} != null && $P{applicantDetails}.getPtyId() != null ? $P{applicantDetails}.getPtyId() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Applicant Address Row 1 -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="42" width="106" height="20" backcolor="#F5F6F6" uuid="5f90a1fc-8e0d-4d01-9e7d-16feded9fcba"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantAddr}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="42" width="387" height="20" uuid="cb6d3d3b-7513-4c5a-bbc7-0d048c19b7af"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantDetails} != null && $P{applicantDetails}.getPtyAddr() != null ? $P{applicantDetails}.getPtyAddr() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Name -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="63" width="106" height="20" backcolor="#F5F6F6" uuid="c1dc2896-8f1e-4683-a843-e3ac2f88d9b1"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryName}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="63" width="138" height="20" uuid="ef424961-f198-466b-a225-c337bde8d44b"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficaryDetails} != null && $P{beneficaryDetails}.getPtyName() != null ? $P{beneficaryDetails}.getPtyName() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary ID -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="63" width="111" height="20" backcolor="#F5F6F6" uuid="c1dc2896-8f1e-4683-a843-e3ac2f88d9b1"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryID}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="63" width="138" height="20" uuid="ef424961-f198-466b-a225-c337bde8d44b"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficaryDetails} != null && $P{beneficaryDetails}.getPtyId() != null ? $P{beneficaryDetails}.getPtyId() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Address Row 1 -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="84" width="106" height="20" backcolor="#F5F6F6" uuid="a8461a6d-2771-41a0-8c2f-3af03326c73b"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryAddr}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="84" width="387" height="20" uuid="7d8c76be-a524-46ad-a422-bee8b09ca234"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficaryDetails} != null && $P{beneficaryDetails}.getPtyAddr() != null ? $P{beneficaryDetails}.getPtyAddr() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Email -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="105" width="106" height="20" backcolor="#F5F6F6" uuid="1a6fd825-2a21-4cda-b13b-a001ac7f3077"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryEmail}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="105" width="387" height="20" uuid="bdd8852a-62cf-4fae-8630-d096b4a40cb1"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficaryDetails} != null && $P{beneficaryDetails}.getPtyEmail() != null ? $P{beneficaryDetails}.getPtyEmail() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank Name -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="126" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="d642aa59-41a6-4816-a8a7-9cf6dd49ccb1"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankName}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="126" width="138" height="20" uuid="5a804bfa-a7e8-41d9-b97f-4f6f51abf921"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankDetails} != null && $P{advisingBankDetails}.getPtyName() != null ? $P{advisingBankDetails}.getPtyName() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank ID -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="126" width="111" height="20" backcolor="#F5F6F6" uuid="0fc5cd90-837c-4212-958f-e8bd3761d4aa"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankID}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="126" width="138" height="20" uuid="c4fad856-11b3-4018-b40a-54b1bf4f14a7"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankDetails} != null && $P{advisingBankDetails}.getPtyId() != null ? $P{advisingBankDetails}.getPtyId() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank Address Row 1 -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="147" width="106" height="20" backcolor="#F5F6F6" uuid="a8461a6d-2771-41a0-8c2f-3af03326c73b"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advBankAddr}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="147" width="387" height="20" uuid="7d8c76be-a524-46ad-a422-bee8b09ca234"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankDetails} != null && $P{advisingBankDetails}.getPtyAddr() != null ? $P{advisingBankDetails}.getPtyAddr() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Confirming Bank Name -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="168" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="0492f37d-020b-41cd-a68d-e5dc843777a2"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.confirmingBankName}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="168" width="138" height="20" uuid="f60dc00a-eb41-44e7-ac2c-0270db3505d1"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{confirmingBankDetails} != null && $P{confirmingBankDetails}.getPtyName() != null ? $P{confirmingBankDetails}.getPtyName() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Confirming Bank ID -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="168" width="111" height="20" backcolor="#F5F6F6" uuid="8eb925be-b0b3-40ce-96f2-1f52391b0840"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.confirmingBankID}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="168" width="138" height="20" uuid="34bfc010-b942-44c2-93e8-b67e1b77ed67"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{confirmingBankDetails} != null && $P{confirmingBankDetails}.getPtyId() != null ? $P{confirmingBankDetails}.getPtyId() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Confirming Bank Address -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="189" width="106" height="20" backcolor="#F5F6F6" uuid="a8461a6d-2771-41a0-8c2f-3af03326c73b"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.confirmingBankAddr}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="189" width="387" height="20" uuid="7d8c76be-a524-46ad-a422-bee8b09ca234"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{confirmingBankDetails} != null && $P{confirmingBankDetails}.getPtyAddr() != null ? $P{confirmingBankDetails}.getPtyAddr() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Nominated Bank Name -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="210" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="0b1ef1c6-ce26-474a-aa35-6768568b0816"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.nominatedBankName}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="210" width="138" height="20" uuid="08498ad9-b454-4c31-8f1d-5fa914719d25"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{nominatedBankDetails} != null && $P{nominatedBankDetails}.getPtyName() != null ? $P{nominatedBankDetails}.getPtyName() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Nominated Bank ID -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="210" width="111" height="20" backcolor="#F5F6F6" uuid="04e324ad-84a5-4e07-89f8-5797ef5df600"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.nominatedBankID}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="210" width="138" height="20" uuid="9b2deec9-f217-4486-aab4-4ea15e8f6883"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{nominatedBankDetails} != null && $P{nominatedBankDetails}.getPtyId() != null ? $P{nominatedBankDetails}.getPtyId() : "-"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Nominated Bank Address Row 1 -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="231" width="106" height="20" backcolor="#F5F6F6" uuid="d630e298-0b57-4c90-96ec-91193cf9de9f"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.nominatedBankAddr}]]></textFieldExpression>
+				</textField>
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="231" width="387" height="20" uuid="7c274191-c057-4a36-8349-6d5753db8d5c"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{nominatedBankDetails} != null && $P{nominatedBankDetails}.getPtyAddr() != null ? $P{nominatedBankDetails}.getPtyAddr() : "-"]]></textFieldExpression>
+				</textField>
+			</band>
+		</groupHeader>
+	</group>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<columnHeader>
+		<band splitType="Stretch"/>
+	</columnHeader>
+	<detail>
+		<band/>
+	</detail>
+</jasperReport>
