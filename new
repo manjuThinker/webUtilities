@@ -1,31 +1,15 @@
-import net.sf.jasperreports.engine.JRException;
-import net.sf.jasperreports.engine.JasperReport;
-import net.sf.jasperreports.engine.design.JasperDesign;
-import net.sf.jasperreports.engine.util.JRLoader;
-import net.sf.jasperreports.engine.xml.JRXmlWriter;
-
-public class JasperToJrxmlConverter {
-  public static String sourcePath,outputPath;
-  public static JasperDesign jd  = new JasperDesign();
-  public static void main(String [] args) {
-    Long executionStartTime=new Long(0);
-    Long executionStopTime=new Long(0);
-    
-    // File Paths
-    sourcePath = "/home/user/file.jasper";
-    outputPath = "/home/user/file.jrxml";
-
-    try {
-      executionStartTime=System.currentTimeMillis();
-      JasperReport jd = (JasperReport) JRLoader.loadObject(sourcePath);
-      JRXmlWriter.writeReport(jd, outputPath, "UTF-8");
-      executionStopTime=System.currentTimeMillis();
-      System.out.println("Successfully Decompiled Jsaper File Into JRXML File : \n");
-      System.out.println("Total Time Taken Is : "+(executionStopTime-executionStartTime)+" ms\n");
-      System.out.println(" JRXML File Name And Location Are :\n");
-      System.out.println(outputPath+"\n");
-    }catch(JRException e){
-      e.printStackTrace();
-    }
-  }
-}
+<textField textAdjust="StretchHeight">
+    <reportElement style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" 
+                   x="107" y="21" width="387" height="20" uuid="abc123"/>
+    <box bottomPadding="3">
+        <pen lineWidth="0.5" lineColor="#C0C0C0"/>
+    </box>
+    <textElement verticalAlignment="Middle" markup="styled">
+        <paragraph leftIndent="5" rightIndent="5"/>
+    </textElement>
+    <textFieldExpression><![CDATA[
+        $F{isGoodsDescriptionStrikeThrough} == true ? 
+            "<style isStrikeThrough='true'>" + $F{goodsDescription} + "</style>\n" + $F{newGoodsDescription} 
+            : $F{newGoodsDescription}
+    ]]></textFieldExpression>
+</textField>
