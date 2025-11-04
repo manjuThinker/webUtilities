@@ -1,195 +1,31 @@
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Component;
-import java.util.function.Supplier;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.design.JasperDesign;
+import net.sf.jasperreports.engine.util.JRLoader;
+import net.sf.jasperreports.engine.xml.JRXmlWriter;
 
-@Component
-public class RetryUtil {
-    private final ApplicationEventPublisher eventPublisher;
-
-    public RetryUtil(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
-    }
-
-    public <T> T executeWithRetry(Supplier<T> operation, String operationId, int maxRetries, long initialDelayMs, double multiplier) {
-        int attempts = 0;
-        Throwable lastException = null;
-
-        while (attempts < maxRetries) {
-            try {
-                return operation.get(); // Execute the operation
-            } catch (Exception e) {
-                attempts++;
-                lastException = e;
-
-                // Publish failure event
-                eventPublisher.publishEvent(new MethodFailureEvent(
-                    operationId,
-                    e.getMessage() != null ? e.getMessage() : "Unknown error",
-                    e
-                ));
-
-                if (attempts < maxRetries) {
-                    // Calculate exponential delay: initialDelay * (multiplier ^ (attempts - 1))
-                    long delayMs = (long) (initialDelayMs * Math.pow(multiplier, attempts - 1));
-                    System.out.println("Attempt " + attempts + " failed. Waiting " + delayMs + "ms before retrying...");
-
-                    try {
-                        Thread.sleep(delayMs);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Retry interrupted", ie);
-                    }
-                }
-            }
-        }
-
-        throw new RuntimeException("Operation failed after " + maxRetries + " attempts", lastException);
-    }
-}
-
-
-==
-
-public class MethodFailureEvent {
-    private final String operationId;
-    private final String errorMessage;
-    private final Throwable exception;
-
-    public MethodFailureEvent(String operationId, String errorMessage, Throwable exception) {
-        this.operationId = operationId;
-        this.errorMessage = errorMessage;
-        this.exception = exception;
-    }
-
-    public String getOperationId() {
-        return operationId;
-    }
-
-    public String getErrorMessage() {
-        return errorMessage;
-    }
-
-    public Throwable getException() {
-        return exception;
-    }
-}
-
-=======================
-
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDateTime;
-import java.util.Optional;
-
-@Component
-public class FailureEventHandler {
-
-    private final RetryRepository retryRepository;
-
-    public FailureEventHandler(RetryRepository retryRepository) {
-        this.retryRepository = retryRepository;
-    }
-
-    @EventListener
-    @Transactional
-    public void handleFailureEvent(MethodFailureEvent event) {
-        // Find or create retry record
-        RetryRecord retryRecord = retryRepository.findByOperationId(event.getOperationId())
-                .orElse(new RetryRecord(event.getOperationId()));
-
-        // Update retry record
-        retryRecord.incrementAttempts();
-        retryRecord.setLastError(event.getErrorMessage());
-        retryRecord.setLastAttemptTime(LocalDateTime.now());
-        retryRecord.setStatus(retryRecord.getAttempts() >= 3 ? "FAILED" : "PENDING_RETRY");
-
-        // Save to database
-        retryRepository.save(retryRecord);
-    }
-}
-================
-
-private Predicate<CombinedData> applyStringListFilter(
-    Predicate<CombinedData> currentPredicate,
-    List<String> filterValues,
-    Function<CombinedData, String> getter,
-    String filterName
-) {
-    if (filterValues != null && !filterValues.isEmpty()) {
-        log.debug("Applying {} filter: {}", filterName, filterValues);
-        return currentPredicate.and(item -> {
-            String itemValue = getter.apply(item);
-            if (itemValue == null) {
-                return false;
-            }
-            
-            // Check if any filter value is partially contained within the item value
-            // or if the item value partially contains any filter value
-            return filterValues.stream().anyMatch(filterValue -> 
-                itemValue.toLowerCase().contains(filterValue.toLowerCase()) || 
-                filterValue.toLowerCase().contains(itemValue.toLowerCase())
-            );
-        });
-    }
-    return currentPredicate;
-}
-=======================
-
-10 Scenarios for Amount Filtering
-
-Scenario: Start = 5000, End = 5000
-Expected Result: Only exact matches of 5000 will be returned
-Explanation: The filter checks for itemAmount >= 5000 && itemAmount <= 5000, which is only true when itemAmount == 5000
-Scenario: Start = 1000, End = 5000
-Expected Result: All amounts between 1000 and 5000 (inclusive) will be returned
-Explanation: Filter returns all records with 1000 ≤ amount ≤ 5000
-Scenario: Start = 0, End = 5000
-Expected Result: All amounts from 0 up to 5000 will be returned
-Explanation: Filter returns all records with amount ≤ 5000
-Scenario: Start = 1000, End = 0
-Expected Result: All amounts from 1000 and above will be returned
-Explanation: With the improved code, when end is 0, it's treated as no upper limit
-Scenario: Start = 0, End = 0
-Expected Result: All records will be returned
-Explanation: This effectively removes both lower and upper bounds, returning everything
-Scenario: Start = null/empty, End = 5000
-Expected Result: All amounts up to 5000 will be returned
-Explanation: The null/empty start is treated as 0
-Scenario: Start = 1000, End = null/empty
-Expected Result: All amounts from 1000 and above will be returned
-Explanation: The null/empty end is treated as having no upper bound
-Scenario: Start = null/empty, End = null/empty
-Expected Result: All records will be returned (filter not applied)
-Explanation: Both bounds are effectively removed
-Scenario: Start = -1000, End = 5000
-Expected Result: All amounts from -1000 to 5000 will be returned
-Explanation: Handles negative values correctly if your data has them
-Scenario: Start = 5000.50, End = 7500.75
-Expected Result: All amounts between 5000.50 and 7500.75 (inclusive) will be returned
-Explanation: Handles decimal values correctly
-
-Here's the updated code to handle all these scenarios properly:
-javaCopyif (filterForm.getLcAmount() != null && filterForm.getLcAmount().size() >= 2) {
-    String startAmountStr = filterForm.getLcAmount().get(0);
-    String endAmountStr = filterForm.getLcAmount().get(1);
+public class JasperToJrxmlConverter {
+  public static String sourcePath,outputPath;
+  public static JasperDesign jd  = new JasperDesign();
+  public static void main(String [] args) {
+    Long executionStartTime=new Long(0);
+    Long executionStopTime=new Long(0);
     
-    // Handle empty or null values
-    boolean hasStartAmount = startAmountStr != null && !startAmountStr.isEmpty() && !"0".equals(startAmountStr);
-    boolean hasEndAmount = endAmountStr != null && !endAmountStr.isEmpty() && !"0".equals(endAmountStr);
-    
-    if (hasStartAmount || hasEndAmount) {
-        // Only apply filter if at least one bound is specified
-        BigDecimal startAmount = hasStartAmount ? new BigDecimal(startAmountStr) : BigDecimal.ZERO;
-        // If endAmount is zero or empty, set it to a very large number
-        BigDecimal endAmount = hasEndAmount ? new BigDecimal(endAmountStr) : new BigDecimal("999999999999.99");
-        
-        log.debug("Applying LC amount range filter from {} to {}", startAmount, endAmount);
-        predicate = predicate.and(item -> {
-            BigDecimal itemAmount = item.getLcAmount();
-            return itemAmount != null && 
-                   itemAmount.compareTo(startAmount) >= 0 && 
-                   itemAmount.compareTo(endAmount) <= 0;
-        });
+    // File Paths
+    sourcePath = "/home/user/file.jasper";
+    outputPath = "/home/user/file.jrxml";
+
+    try {
+      executionStartTime=System.currentTimeMillis();
+      JasperReport jd = (JasperReport) JRLoader.loadObject(sourcePath);
+      JRXmlWriter.writeReport(jd, outputPath, "UTF-8");
+      executionStopTime=System.currentTimeMillis();
+      System.out.println("Successfully Decompiled Jsaper File Into JRXML File : \n");
+      System.out.println("Total Time Taken Is : "+(executionStopTime-executionStartTime)+" ms\n");
+      System.out.println(" JRXML File Name And Location Are :\n");
+      System.out.println(outputPath+"\n");
+    }catch(JRException e){
+      e.printStackTrace();
     }
+  }
 }
