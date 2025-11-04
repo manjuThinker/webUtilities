@@ -1,50 +1,609 @@
-<!-- Field 1: Old Value - Strikethrough (Show when changed) -->
-<textField textAdjust="StretchHeight" isBlankWhenNull="true">
-    <reportElement style="TradeTI-Data" x="107" y="131" width="138" height="15" forecolor="#666666" uuid="old-value">
-        <printWhenExpression><![CDATA[
-            Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})
-        ]]></printWhenExpression>
-    </reportElement>
-    <box bottomPadding="2">
-        <pen lineWidth="0.5" lineColor="#C0C0C0"/>
-        <bottomPen lineWidth="0.0" lineColor="#C0C0C0"/>
-    </box>
-    <textElement verticalAlignment="Middle">
-        <font isStrikeThrough="true"/>
-        <paragraph leftIndent="5" rightIndent="5"/>
-    </textElement>
-    <textFieldExpression><![CDATA[$P{beneficiaryRelatedPartyValue}]]></textFieldExpression>
-</textField>
-
-<!-- Field 2: New Value - Normal (Show when changed) -->
-<textField textAdjust="StretchHeight" isBlankWhenNull="true">
-    <reportElement style="TradeTI-Data" x="107" y="146" width="138" height="15" uuid="new-value">
-        <printWhenExpression><![CDATA[
-            Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})
-        ]]></printWhenExpression>
-    </reportElement>
-    <box bottomPadding="2">
-        <pen lineWidth="0.5" lineColor="#C0C0C0"/>
-        <topPen lineWidth="0.0" lineColor="#C0C0C0"/>
-    </box>
-    <textElement verticalAlignment="Middle">
-        <paragraph leftIndent="5" rightIndent="5"/>
-    </textElement>
-    <textFieldExpression><![CDATA[$P{newBeneficiaryRelatedPartyValue}]]></textFieldExpression>
-</textField>
-
-<!-- Field 3: Show ONLY new value when NOT changed -->
-<textField textAdjust="StretchHeight" isBlankWhenNull="true">
-    <reportElement style="TradeTI-Data" x="107" y="131" width="138" height="30" uuid="unchanged-value">
-        <printWhenExpression><![CDATA[
-            !Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})
-        ]]></printWhenExpression>
-    </reportElement>
-    <box bottomPadding="2">
-        <pen lineWidth="0.5" lineColor="#C0C0C0"/>
-    </box>
-    <textElement verticalAlignment="Middle">
-        <paragraph leftIndent="5" rightIndent="5"/>
-    </textElement>
-    <textFieldExpression><![CDATA[$P{newBeneficiaryRelatedPartyValue}]]></textFieldExpression>
-</textField>
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="TTI6010LCAmd_PartyDetails" pageWidth="495" pageHeight="842" whenNoDataType="NoPages" columnWidth="495" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" resourceBundle="i18n" whenResourceMissingType="Empty" uuid="8fbb6b8e-1839-47f0-be71-609aa3c1a2be">
+	<property name="ireport.zoom" value="2.0"/>
+	<property name="ireport.x" value="0"/>
+	<property name="ireport.y" value="0"/>
+	<property name="ireport.scriptlethandling" value="0"/>
+	<property name="ireport.encoding" value="UTF-8"/>
+	<import value="net.sf.jasperreports.engine.*"/>
+	<import value="java.util.*"/>
+	<import value="net.sf.jasperreports.engine.data.*"/>
+	<style name="TradeTI-Data" isDefault="true" isBlankWhenNull="true" fontName="Arial" fontSize="8" pdfFontName="ARIALUNI.TTF"/>
+	<style name="TradeTI-Label" mode="Opaque" backcolor="#F5F6F6" markup="styled" isBlankWhenNull="true" fontName="Arial" fontSize="8" pdfFontName="ARIALUNI.TTF"/>
+	<parameter name="P_SUBREPORT_DIR" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankId" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankCountryCode" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankType" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankAddress" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankCountryName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankEmail" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankContactPerson" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="advisingBankPhoneNumber" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryId" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryCountryCode" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryType" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryAddress" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryCountryName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryEmail" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryContactPerson" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryPhoneNumber" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantId" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantCountryCode" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantType" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantAddress" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantCountryName" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantEmail" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantContactPerson" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="applicantPhoneNumber" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryRelatedPartyId" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="beneficiaryRelatedPartyValue" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="newBeneficiaryRelatedPartyId" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="newBeneficiaryRelatedPartyValue" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="isBeneficiaryRelatedPartyStrikeThrough" class="java.lang.Boolean" isForPrompting="false"/>
+	<group name="LC">
+		<groupExpression><![CDATA[]]></groupExpression>
+		<groupHeader>
+			<band height="284" splitType="Stretch">
+				<!-- Title -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" x="1" y="0" width="398" height="21" uuid="title-field"/>
+					<textElement verticalAlignment="Top">
+						<font size="10" isBold="true"/>
+					</textElement>
+					<textFieldExpression><![CDATA["1. "+$R{text.partydetails}]]></textFieldExpression>
+				</textField>
+				
+				<!-- APPLICANT SECTION -->
+				<!-- Applicant Name Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="21" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="applicant-name-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantName}]]></textFieldExpression>
+				</textField>
+				<!-- Applicant Name Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="21" width="138" height="20" uuid="applicant-name-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantName}]]></textFieldExpression>
+				</textField>
+				<!-- Applicant ID Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="21" width="111" height="20" backcolor="#F5F6F6" uuid="applicant-id-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantID}]]></textFieldExpression>
+				</textField>
+				<!-- Applicant ID Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="21" width="138" height="20" uuid="applicant-id-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantId}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Applicant Country Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="42" width="106" height="20" backcolor="#F5F6F6" uuid="applicant-country-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantCountryMarket}]]></textFieldExpression>
+				</textField>
+				<!-- Applicant Country Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="42" width="387" height="20" uuid="applicant-country-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantCountryName}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Applicant Address Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="63" width="106" height="20" backcolor="#F5F6F6" uuid="applicant-address-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.applicantAddress}]]></textFieldExpression>
+				</textField>
+				<!-- Applicant Address Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="63" width="387" height="20" uuid="applicant-address-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{applicantAddress}]]></textFieldExpression>
+				</textField>
+				
+				<!-- BENEFICIARY SECTION -->
+				<!-- Beneficiary Name Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="90" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="beneficiary-name-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryName}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary Name Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="90" width="138" height="20" uuid="beneficiary-name-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryName}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Empty Label (for test - shows Boolean value) -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="90" width="111" height="20" backcolor="#F5F6F6" uuid="empty-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA["Test"]]></textFieldExpression>
+				</textField>
+				<!-- Test Boolean Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="90" width="138" height="20" uuid="test-boolean"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{isBeneficiaryRelatedPartyStrikeThrough} != null ? $P{isBeneficiaryRelatedPartyStrikeThrough}.toString() : "NULL"]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary ID Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="110" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="beneficiary-id-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryId}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary ID Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="110" width="138" height="20" uuid="beneficiary-id-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryId}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Email Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="110" width="111" height="20" backcolor="#F5F6F6" uuid="beneficiary-email-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryEmail}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary Email Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="110" width="138" height="20" uuid="beneficiary-email-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryEmail}]]></textFieldExpression>
+				</textField>
+				
+				<!-- ===== BENEFICIARY RELATED PARTY WITH STRIKETHROUGH ===== -->
+				<!-- Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="131" width="106" height="30" forecolor="#000000" backcolor="#F5F6F6" uuid="beneficiary-related-party-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryIsRelatedParty}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Field 1: Old Value - Strikethrough (Show when changed) -->
+				<textField textAdjust="StretchHeight" isBlankWhenNull="true">
+					<reportElement style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="131" width="138" height="15" forecolor="#666666" uuid="old-value">
+						<printWhenExpression><![CDATA[Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})]]></printWhenExpression>
+					</reportElement>
+					<box bottomPadding="2">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.0" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<font isStrikeThrough="true"/>
+						<paragraph leftIndent="5" rightIndent="5"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryRelatedPartyValue}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Field 2: New Value - Normal (Show when changed) -->
+				<textField textAdjust="StretchHeight" isBlankWhenNull="true">
+					<reportElement style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="146" width="138" height="15" uuid="new-value">
+						<printWhenExpression><![CDATA[Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})]]></printWhenExpression>
+					</reportElement>
+					<box bottomPadding="2">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.0" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{newBeneficiaryRelatedPartyValue}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Field 3: Show ONLY new value when NOT changed -->
+				<textField textAdjust="StretchHeight" isBlankWhenNull="true">
+					<reportElement style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="131" width="138" height="30" uuid="unchanged-value">
+						<printWhenExpression><![CDATA[!Boolean.TRUE.equals($P{isBeneficiaryRelatedPartyStrikeThrough})]]></printWhenExpression>
+					</reportElement>
+					<box bottomPadding="2">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{newBeneficiaryRelatedPartyValue}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Country Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="131" width="111" height="30" backcolor="#F5F6F6" uuid="beneficiary-country-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryCountryMarket}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary Country Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="131" width="138" height="30" uuid="beneficiary-country-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryCountryName}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Address Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="162" width="106" height="20" backcolor="#F5F6F6" uuid="beneficiary-address-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryAddress}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary Address Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="162" width="387" height="20" uuid="beneficiary-address-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryAddress}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Beneficiary Phone Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="183" width="106" height="20" backcolor="#F5F6F6" uuid="beneficiary-phone-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.beneficiaryPhoneNo}]]></textFieldExpression>
+				</textField>
+				<!-- Beneficiary Phone Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="183" width="387" height="20" uuid="beneficiary-phone-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{beneficiaryPhoneNumber}]]></textFieldExpression>
+				</textField>
+				
+				<!-- ADVISING BANK SECTION -->
+				<!-- Advising Bank Name Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="210" width="106" height="20" forecolor="#000000" backcolor="#F5F6F6" uuid="advising-bank-name-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankName}]]></textFieldExpression>
+				</textField>
+				<!-- Advising Bank Name Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="210" width="138" height="20" uuid="advising-bank-name-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankName}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank ID Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="245" y="210" width="111" height="20" backcolor="#F5F6F6" uuid="advising-bank-id-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankId}]]></textFieldExpression>
+				</textField>
+				<!-- Advising Bank ID Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="356" y="210" width="138" height="20" uuid="advising-bank-id-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankId}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank Country Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="231" width="106" height="20" backcolor="#F5F6F6" uuid="advising-bank-country-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankCountryMarket}]]></textFieldExpression>
+				</textField>
+				<!-- Advising Bank Country Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="231" width="387" height="20" uuid="advising-bank-country-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankCountryName}]]></textFieldExpression>
+				</textField>
+				
+				<!-- Advising Bank Address Label -->
+				<textField textAdjust="StretchHeight">
+					<reportElement style="TradeTI-Label" positionType="Float" stretchType="RelativeToTallestObject" mode="Opaque" x="1" y="252" width="106" height="20" backcolor="#F5F6F6" uuid="advising-bank-address-label"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$R{text.advisingBankAddress}]]></textFieldExpression>
+				</textField>
+				<!-- Advising Bank Address Value -->
+				<textField textAdjust="StretchHeight" pattern="" isBlankWhenNull="true">
+					<reportElement key="textField" style="TradeTI-Data" positionType="Float" stretchType="RelativeToTallestObject" x="107" y="252" width="387" height="20" uuid="advising-bank-address-value"/>
+					<box bottomPadding="3">
+						<pen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<topPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<leftPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<bottomPen lineWidth="0.5" lineColor="#C0C0C0"/>
+						<rightPen lineWidth="0.5" lineColor="#C0C0C0"/>
+					</box>
+					<textElement verticalAlignment="Middle">
+						<paragraph leftIndent="5" rightIndent="5" spacingBefore="3" spacingAfter="3"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$P{advisingBankAddress}]]></textFieldExpression>
+				</textField>
+			</band>
+		</groupHeader>
+	</group>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<columnHeader>
+		<band splitType="Stretch"/>
+	</columnHeader>
+	<detail>
+		<band/>
+	</detail>
+</jasperReport>
