@@ -1,462 +1,355 @@
-# KRaft Mode Configuration
-process.roles=broker,controller
-node.id=1
-controller.quorum.voters=1@localhost:9093
-listeners=PLAINTEXT://:9092,CONTROLLER://:9093
-advertised.listeners=PLAINTEXT://localhost:9092
-listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-log.dirs=C:/kafka/data
-num.partitions=1
-default.replication.factor=1
-min.insync.replicas=1
-auto.create.topics.enable=true
-=======================
-spring:
-  kafka:
-    bootstrap-servers: tp-kafkatxn-service-01.tx.standardchartered.com:9092,tp-kafkatxn-service-02.tx.standardchartered.com:9092,tp-kafkatxn-service-03.tx.standardchartered.com:9092
-    listener:
-      topics: car-topic
-Updated Properties Class
-Nest topics under a Listener subclass and add a getter:
-
-java
-
-Collapse
-
-Wrap
-
-Copy
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-
-@Component
-@ConfigurationProperties(prefix = "spring.kafka")
-public class KafkaProperties {
-    private String bootstrapServers; // Comma-separated string
-    private Listener listener = new Listener();
-
-    public String getBootstrapServers() { return bootstrapServers; }
-    public void setBootstrapServers(String bootstrapServers) { this.bootstrapServers = bootstrapServers; }
-    public Listener getListener() { return listener; }
-    public void setListener(Listener listener) { this.listener = listener; }
-
-    public static class Listener {
-        private String topics;
-
-        public String getTopics() { return topics; }
-        public void setTopics(String topics) { this.topics = topics; }
-    }
-}
-
-========================
-1. Start → Scheduler runs every 15 seconds.
-2. ↓ Fetch → Query: Get 'pending' OR 'pending retry' where next_retry_time <= now.
-3. ↓ Process → Attempt to process each record.
-4. ↓ Success? → If yes, set status = 'success', next_retry_time = null, attempt_count = 0.
-5. ↓ Failure? → If no, publish FailedEvent with record details.
-6. ↓ Event Listener → Catches FailedEvent.
-7. ↓ First Failure? → If status = 'pending' and attempt_count = 0:
-8. ↓ Set Retry → Set status = 'pending retry', attempt_count = 1, next_retry_time = now + 15s (future time updated here).
-9. ↓ Retry Failure? → If status = 'pending retry' and attempt_count > 0:
-10. ↓ Check Attempts → If attempt_count < 3:
-11. ↓ Update Retry → attempt_count++, next_retry_time = now + (15s * 2^(attempt_count-1)) (future time updated here).
-12. ↓ Max Attempts? → If attempt_count = 3, set status = 'failed', next_retry_time = null.
-13. ↓ Save → Update record in DB, loop back to scheduler.
-=========================================
-Direct Answer
-Overview
-To handle retries for an external API call without blocking threads for hours, especially with exponential backoff delays (15 minutes initially, doubling to 30, 60 minutes, for up to 3 attempts total), you can use Spring’s TaskScheduler for asynchronous scheduling. This ensures the thread is released immediately after failure, and retries are managed by scheduling tasks at the appropriate times, updating the database for each retry.
-
-Initial Setup: Polling and Publishing
-Start with your fetchPendingRecords() method, which polls every 10 seconds to fetch "PENDING" records from the database. When records are found, publish them as a PendingRecordsEvent. Another method subscribes to this event, changes the status to "INPROGRESS," and calls the external API using RestTemplate, which might fail.
-
-Example: In StatusUpdateService, use @Scheduled(fixedRate = 10000) to fetch records and publish events:
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Scheduled(fixedRate = 10000)
-@Async
-@Transactional
-public void fetchPendingRecords() {
-    List<Record> pendingRecords = entityManager.createQuery("SELECT r FROM Record r WHERE r.status = :status", Record.class)
-            .setParameter("status", "PENDING")
-            .getResultList();
-    if (!pendingRecords.isEmpty()) {
-        eventPublisher.publishEvent(new PendingRecordsEvent(this, pendingRecords));
-    }
-}
-Subscribe in RecordProcessor to change status and call API:
-java
-
-Collapse
-
-Wrap
-
-Copy
-@EventListener
-@Async
-@Transactional
-public void handlePendingRecords(PendingRecordsEvent event) {
-    List<Record> records = event.getRecords();
-    for (Record record : records) {
-        record.setStatus("INPROGRESS");
-        entityManager.merge(record);
-        try {
-            callExternalApi(record); // This might fail
-        } catch (Exception e) {
-            // Handle failure: publish event for retry
-            eventPublisher.publishEvent(new MethodFailureEvent(record.getId().toString(), e.getMessage(), e));
-        }
-    }
-}
-Handling Failures with TaskScheduler
-When the API call fails in callExternalApi, publish a MethodFailureEvent. Use TaskScheduler to schedule retries asynchronously, ensuring the thread isn’t blocked. Each retry updates the database, and if all fail, mark as "FAILED."
-
-Configure TaskScheduler:
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Bean
-public ThreadPoolTaskScheduler taskScheduler() {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(5);
-    scheduler.setThreadNamePrefix("retryScheduler-");
-    scheduler.initialize();
-    return scheduler;
-}
-Event Handler for Retries:
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Component
-public class FailureEventHandler {
-    @Autowired
-    private RetryRepository retryRepository;
-    @Autowired
-    private ThreadPoolTaskScheduler taskScheduler;
-
-    @EventListener
-    @Transactional
-    public void handleFailureEvent(MethodFailureEvent event) {
-        RetryRecord record = retryRepository.findByOperationId(event.getOperationId())
-                .orElse(new RetryRecord(event.getOperationId()));
-        record.setAttempts(record.getAttempts() + 1);
-        record.setLastError(event.getErrorMessage());
-        record.setLastAttemptTime(LocalDateTime.now());
-        if (record.getAttempts() < 3) { // Max 3 attempts total
-            record.setStatus("PENDING_RETRY");
-            scheduleNextRetry(event.getOperationId(), record.getAttempts());
-        } else {
-            record.setStatus("FAILED");
-        }
-        retryRepository.save(record);
-    }
-
-    private void scheduleNextRetry(String operationId, int attempt) {
-        long initialDelayMs = 15 * 60 * 1000; // 15 minutes
-        double multiplier = 2.0;
-        long delayMs = (long) (initialDelayMs * Math.pow(multiplier, attempt - 1));
-        taskScheduler.schedule(new RetryTask(operationId), new Date(System.currentTimeMillis() + delayMs));
-    }
-}
-Retry Task:
-java
-
-Collapse
-
-Wrap
-
-Copy
-public class RetryTask implements Runnable {
-    private final String operationId;
-
-    public RetryTask(String operationId) {
-        this.operationId = operationId;
-    }
-
-    @Override
-    public void run() {
-        RetryRecord record = retryRepository.findByOperationId(operationId);
-        if (record != null && record.getStatus().equals("PENDING_RETRY")) {
-            try {
-                Record originalRecord = entityManager.find(Record.class, Long.valueOf(operationId));
-                callExternalApi(originalRecord); // Retry the API call
-            } catch (Exception e) {
-                ApplicationEventPublisher eventPublisher = ApplicationContextProvider.getBean(ApplicationEventPublisher.class);
-                eventPublisher.publishEvent(new MethodFailureEvent(operationId, e.getMessage(), e));
-            }
-        }
-    }
-}
-Unexpected Detail: This approach allows parallel processing of multiple operations, improving system throughput by not blocking threads during delays, which is particularly useful at 08:35 AM PDT on Monday, March 24, 2025, during peak business hours.
-Integration
-Ensure RetryRecord stores enough data to reconstruct the request, such as the operation ID mapping to the original record. Use events to handle status changes and API calls, ensuring retries are scheduled without blocking.
-
-Comprehensive Analysis of Asynchronous Retry Mechanisms in Spring Boot
-Introduction
-The requirement to implement a retry mechanism for external API calls without blocking threads for extended periods, especially with exponential backoff delays (15 minutes initially, doubling to 30, 60 minutes, for up to 3 attempts total), aligns with enhancing the resilience and efficiency of Spring Boot applications. The manager’s directive to “fail gracefully” and release threads immediately after failure, leveraging database updates for retry tracking, suggests a shift from synchronous blocking retries to asynchronous scheduling. This analysis explores the implementation using Spring’s TaskScheduler, focusing on how it integrates with the user’s existing flow of polling for "PENDING" records, publishing events, subscribing to change status to "INPROGRESS," and handling API failures with retries.
-
-The user’s initial setup involves fetchPendingRecords() polling every 10 seconds to fetch "PENDING" records, publishing them as PendingRecordsEvent, and another method subscribing to change the status to "INPROGRESS" and calling the external API via RestTemplate, which may fail. The challenge is to ensure that upon failure, retries are handled asynchronously, updating the database, and failing gracefully without long thread blocks. This report details the implementation, evaluates its suitability, and provides insights into database interactions and state management.
-
-Understanding the Retry Scenario
-The user’s setup involves:
-
-Polling every 10 seconds for "PENDING" records using fetchPendingRecords(), publishing PendingRecordsEvent.
-Subscribing to the event, changing status to "INPROGRESS," and calling an external API, which may fail.
-Upon failure, the system should retry up to 3 times (initial attempt + 2 retries), with delays of 15 minutes, then 30 minutes, then 60 minutes, potentially blocking threads for up to 105 minutes (1 hour 45 minutes).
-The manager’s concern is that blocking a thread for such durations is unacceptable, especially in a server environment where threads are limited. Instead, the system should release the thread after each failure, schedule retries asynchronously, and rely on database updates (via RetryRecord) to track state, ensuring graceful failure.
-The flow starts with polling for "PENDING" records, publishing events, and subscribing to change status to "INPROGRESS" before API calls. When the API call fails, we need to schedule retries using TaskScheduler, ensuring the thread is released and database updates track retry attempts. This requires integrating the retry mechanism with the existing event-driven flow, ensuring state consistency and handling concurrent operations.
-
-Implementing Asynchronous Retries with TaskScheduler
-To address this, let’s break down the implementation:
-
-Define the Retry Record: Create a database entity (RetryRecord) to track retry attempts for each operation, including operation ID, attempt count, last error, last attempt time, and status.
-java
-
-Collapse
-
-Wrap
-
-Copy
-import jakarta.persistence.*;
-
-import java.time.LocalDateTime;
-
-@Entity
-@Table(name = "retry_records")
-public class RetryRecord {
-    @Id
-    private String operationId;
-    private int attempts = 0;
-    private String lastError;
-    private LocalDateTime lastAttemptTime;
-    private String status;
-
-    // Getters and Setters
-    public String getOperationId() { return operationId; }
-    public void setOperationId(String operationId) { this.operationId = operationId; }
-    public int getAttempts() { return attempts; }
-    public void setAttempts(int attempts) { this.attempts = attempts; }
-    public String getLastError() { return lastError; }
-    public void setLastError(String lastError) { this.lastError = lastError; }
-    public LocalDateTime getLastAttemptTime() { return lastAttemptTime; }
-    public void setLastAttemptTime(LocalDateTime lastAttemptTime) { this.lastAttemptTime = lastAttemptTime; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-}
-Repository for Retry Record: Use Spring Data JPA to interact with RetryRecord.
-java
-
-Collapse
-
-Wrap
-
-Copy
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
-
-public interface RetryRepository extends JpaRepository<RetryRecord, String> {
-    Optional<RetryRecord> findByOperationId(String operationId);
-}
-Event Definition: Create a custom event (MethodFailureEvent) to capture failure details, including operation ID, error message, and exception.
-java
-
-Collapse
-
-Wrap
-
-Copy
-public class MethodFailureEvent {
-    private final String operationId;
-    private final String errorMessage;
-    private final Throwable exception;
-
-    public MethodFailureEvent(String operationId, String errorMessage, Throwable exception) {
-        this.operationId = operationId;
-        this.errorMessage = errorMessage;
-        this.exception = exception;
-    }
-
-    // Getters
-    public String getOperationId() { return operationId; }
-    public String getErrorMessage() { return errorMessage; }
-    public Throwable getException() { return exception; }
-}
-Initial Polling and Publishing: Implement fetchPendingRecords() to poll every 10 seconds and publish events for "PENDING" records.
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Service
-public class StatusUpdateService {
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
-
-    @Scheduled(fixedRate = 10000)
-    @Async
-    @Transactional
-    public void fetchPendingRecords() {
-        List<Record> pendingRecords = entityManager.createQuery("SELECT r FROM Record r WHERE r.status = :status", Record.class)
-                .setParameter("status", "PENDING")
-                .getResultList();
-        if (!pendingRecords.isEmpty()) {
-            eventPublisher.publishEvent(new PendingRecordsEvent(this, pendingRecords));
-        }
-    }
-}
-Subscribe and Change Status to "INPROGRESS": Implement a subscriber to handle PendingRecordsEvent, change status to "INPROGRESS," and call the external API.
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Component
-public class RecordProcessor {
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
-
-    @EventListener
-    @Async
-    @Transactional
-    public void handlePendingRecords(PendingRecordsEvent event) {
-        List<Record> records = event.getRecords();
-        for (Record record : records) {
-            record.setStatus("INPROGRESS");
-            entityManager.merge(record);
-            try {
-                callExternalApi(record); // This might fail
-            } catch (Exception e) {
-                eventPublisher.publishEvent(new MethodFailureEvent(record.getId().toString(), e.getMessage(), e));
-            }
-        }
-    }
-
-    private void callExternalApi(Record record) {
-        // Assume this calls RestTemplate to external API
-        // For example:
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<String> entity = new HttpEntity<>("request data", headers);
-        ResponseEntity<String> response = restTemplate.exchange(
-            "http://external-api.com/endpoint",
-            HttpMethod.POST,
-            entity,
-            String.class
-        );
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new RuntimeException("API call failed: " + response.getStatusCode());
-        }
-    }
-}
-Configure TaskScheduler: Add a bean for ThreadPoolTaskScheduler to manage retry tasks.
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Configuration
-public class SchedulingConfig {
-    @Bean
-    public ThreadPoolTaskScheduler taskScheduler() {
-        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(5);
-        scheduler.setThreadNamePrefix("retryScheduler-");
-        scheduler.initialize();
-        return scheduler;
-    }
-}
-Event Handler for Retries: Implement FailureEventHandler to handle MethodFailureEvent, update the database, and schedule retries.
-java
-
-Collapse
-
-Wrap
-
-Copy
-@Component
-public class FailureEventHandler {
-    @Autowired
-    private RetryRepository retryRepository;
-    @Autowired
-    private ThreadPoolTaskScheduler taskScheduler;
-
-    @EventListener
-    @Transactional
-    public void handleFailureEvent(MethodFailureEvent event) {
-        RetryRecord record = retryRepository.findByOperationId(event.getOperationId())
-                .orElse(new RetryRecord(event.getOperationId()));
-        record.setAttempts(record.getAttempts() + 1);
-        record.setLastError(event.getErrorMessage());
-        record.setLastAttemptTime(LocalDateTime.now());
-        if (record.getAttempts() < 3) { // Max 3 attempts total
-            record.setStatus("PENDING_RETRY");
-            scheduleNextRetry(event.getOperationId(), record.getAttempts());
-        } else {
-            record.setStatus("FAILED");
-        }
-        retryRepository.save(record);
-    }
-
-    private void scheduleNextRetry(String operationId, int attempt) {
-        long initialDelayMs = 15 * 60 * 1000; // 15 minutes
-        double multiplier = 2.0;
-        long delayMs = (long) (initialDelayMs * Math.pow(multiplier, attempt - 1));
-        taskScheduler.schedule(new RetryTask(operationId), new Date(System.currentTimeMillis() + delayMs));
-    }
-}
-Retry Task: Implement RetryTask to retrieve the record and retry the API call.
-java
-
-Collapse
-
-Wrap
-
-Copy
-public class RetryTask implements Runnable {
-    private final String operationId;
-
-    public RetryTask(String operationId) {
-        this.operationId = operationId;
-    }
-
-    @Override
-    public void run() {
-        RetryRecord record = retryRepository.findByOperationId(operationId);
-        if (record != null && record.getStatus().equals("PENDING_RETRY")) {
-            try {
-                Record originalRecord = entityManager.find(Record.class, Long.valueOf(operationId));
-                RecordProcessor processor = ApplicationContextProvider.getBean(RecordProcessor.class);
-                processor.callExternalApi(originalRecord); // Retry the API call
-            } catch (Exception e) {
-                ApplicationEventPublisher eventPublisher = ApplicationContextProvider.getBean(ApplicationEventPublisher.class);
-                eventPublisher.publishEvent(new MethodFailureEvent(operationId, e.getMessage(), e));
-            }
-        }
-    }
-}
-When and How "Pending Retry" is Called
+
+// Complete Dummy ViewAmendmentLCResponseExp Object
+ViewAmendmentLCResponseExp response = new ViewAmendmentLCResponseExp();
+
+// ========== PARTY DETAILS ==========
+response.setAdvisingBankName("BANK OF AMERICA");
+response.setAdvisingBankId("BOFA001");
+response.setAdvisingBankCountryCode("US");
+response.setAdvisingBankType("Advising");
+response.setAdvisingBankAddress("123 Park Avenue, New York, NY 10017, USA");
+response.setAdvisingBankCountryName("United States");
+response.setAdvisingBankEmail("trade@bofa.com");
+response.setAdvisingBankContactPerson("John Smith");
+response.setAdvisingBankPhoneNumber("+1-212-9946000");
+
+response.setConfirmingBankName("DEUTSCHE BANK");
+response.setConfirmingBankId("DBAK001");
+response.setConfirmingBankCountryCode("DE");
+response.setConfirmingBankType("Confirming");
+response.setConfirmingBankAddress("Taunusanlage 12, 60325 Frankfurt, Germany");
+response.setConfirmingBankCountryName("Germany");
+response.setConfirmingBankEmail("trade@deutschebank.com");
+response.setConfirmingBankContactPerson("Hans Mueller");
+response.setConfirmingBankPhoneNumber("+49-69-9105-0");
+
+response.setBeneficiaryName("ABC EXPORT COMPANY");
+response.setBeneficiaryId("BENE001");
+response.setBeneficiaryCountryCode("IN");
+response.setBeneficiaryType("Exporter");
+response.setBeneficiaryAddress("456 Export Lane, Chennai, TN 600001, India");
+response.setBeneficiaryCountryName("India");
+response.setBeneficiaryEmail("sales@abcexports.com");
+response.setBeneficiaryContactPerson("Raj Kumar");
+response.setBeneficiaryPhoneNumber("+91-44-24355555");
+
+response.setApplicantName("XYZ IMPORT COMPANY");
+response.setApplicantId("APPL001");
+response.setApplicantCountryCode("SG");
+response.setApplicantType("Importer");
+response.setApplicantAddress("789 Import Street, Singapore 048567");
+response.setApplicantCountryName("Singapore");
+response.setApplicantEmail("procurement@xyzimports.com");
+response.setApplicantContactPerson("David Tan");
+response.setApplicantPhoneNumber("+65-6234-5678");
+
+response.setNominatedBankName("HSBC HONG KONG");
+response.setNominatedBankId("NOMI001");
+response.setNominatedBankCountryCode("HK");
+response.setNominatedBankType("Nominated");
+response.setNominatedBankAddress("1 Queen's Road Central, Hong Kong");
+response.setNominatedBankCountryName("Hong Kong");
+response.setNominatedBankEmail("trade@hsbc.hk");
+response.setNominatedBankContactPerson("Li Wei");
+response.setNominatedBankPhoneNumber("+852-2822-1111");
+
+// ========== TRANSACTION & REFERENCE ==========
+response.setTransactionSuccess("SUCCESS");
+response.setDtpCustomerId("CUST123456");
+response.setCompanyReference("LC/2024/001");
+response.setNewCompanyReference("LC/2024/001-AMN");
+response.setIsCompanyReferenceStrikeThrough(true);
+
+response.setBankLCReference("SWIFT-LC-123456789");
+response.setExportLcReferenceValue("EXPORT-REF-2024-001");
+response.setPurposeOfRequestValue("Amendment - Change in Amount");
+response.setNatureOfChangeValue("Increase in LC Amount");
+
+// ========== LC TYPE & AMENDMENT ==========
+response.setLcTypeId("TYPE001");
+response.setLcTypeValue("Sight LC");
+response.setNewLcTypeId("TYPE001");
+response.setNewLcTypeValue("Sight LC");
+response.setAmendmentDate("2024-11-05");
+
+response.setRequestBeneConsentId("CONSENT001");
+response.setRequestBeneConsentValue("Yes");
+
+response.setTransferableLCId("TRANS001");
+response.setTransferableLCValue("No");
+response.setNewTransferableLCId("TRANS001");
+response.setNewTransferableLCValue("Yes");
+response.setIsTransferableLCStrikeThrough(true);
+
+response.setSustainableFinanceTransactionValue("Yes");
+
+// ========== CONFIRMATION & SENT BY ==========
+response.setConfirmationToggleId("CONF001");
+response.setConfirmationToggleValue("Unconfirmed");
+response.setNewConfirmationToggleId("CONF001");
+response.setNewConfirmationToggleValue("Confirmed");
+response.setIsConfirmationToggleStrikeThrough(true);
+
+response.setSentById("SENT001");
+response.setSentByValue("Applicant");
+
+// ========== REIMBURSEMENT & CHARGES ==========
+response.setReimbursementInstruction("SWIFT Transfer");
+response.setNewReimbursementInstruction("Cheque Payment");
+response.setIsReimbursementInstructionStrikeThrough(true);
+
+response.setTtReimbursementAllowed("Yes");
+response.setNewTtReimbursementAllowed("No");
+response.setIsTtReimbursementAllowedStrikeThrough(false);
+
+response.setAmendmentChargesValue("USD 500");
+response.setAccountNoChargesValue("Applicant Account");
+response.setFxChargesValue("Quoted Rate");
+response.setFxContractNo("FX-2024-001");
+response.setFxRate("1.10");
+
+// ========== LC AMOUNT & CURRENCY ==========
+response.setLcAmountCCYId("CCY001");
+response.setLcAmountCCYValue("USD 100,000");
+response.setAmount("100000");
+
+response.setAdditionalAmounts("USD 10,000");
+response.setNewAdditionalAmounts("USD 15,000");
+response.setIsAdditionalAmountsStrikeThrough(false);
+
+response.setAdditionalAmountDesc("Initial freight coverage");
+response.setNewAdditionalAmountDesc("Extended freight and insurance coverage");
+
+response.setLcAddtionalAmountCCYId("CCY002");
+response.setLcAddtionalAmountCCYValue("USD");
+
+// ========== AMOUNT CHANGES ==========
+response.setAmountChangeId("CHANGE001");
+response.setAmountChangeValue("Increase by USD 5,000");
+
+// ========== TOLERANCE & VARIANCE ==========
+response.setToleranceToggleId("TOL001");
+response.setToleranceToggleValue("5% More or Less");
+response.setNewToleranceToggleId("TOL001");
+response.setNewToleranceToggleValue("3% More or Less");
+response.setIsToleranceToggleStrikeThrough(true);
+
+response.setVariancePlus("5");
+response.setNewVariancePlus("3");
+response.setIsVariancePlusStrikeThrough(false);
+
+response.setVarianceMinus("5");
+response.setNewVarianceMinus("3");
+response.setIsVarianceMinusStrikeThrough(false);
+
+// ========== INCOTERMS ==========
+response.setIncotermYearId("INC001");
+response.setIncotermYearValue("INCOTERMS 2020");
+response.setNewIncotermYearId("INC001");
+response.setNewIncotermYearValue("INCOTERMS 2020");
+response.setIsIncotermYearStrikeThrough(false);
+
+response.setIncotermsYearValueId("INCVAL001");
+response.setIncotermsYearValueValue("CIF - Cost, Insurance & Freight");
+
+response.setIncotermDetailsValue("CIF Bangkok");
+
+// ========== AVAILABILITY & PRESENTATION ==========
+response.setAvailableWithId("AW001");
+response.setAvailableWithValue("Advising Bank");
+response.setNewAvailableWithId("AW001");
+response.setNewAvailableWithValue("Nominated Bank");
+response.setIsAvailableWithStrikeThrough(true);
+
+response.setAvailableById("AB001");
+response.setAvailableByValue("By Negotiation");
+response.setNewAvailableById("AB001");
+response.setNewAvailableByValue("By Acceptance");
+
+// ========== TENOR ==========
+response.setTenorTypeToggleId("TT001");
+response.setTenorTypeToggleValue("30 Days After Bill of Lading");
+response.setNewTenorTypeToggleId("TT001");
+response.setNewTenorTypeToggleValue("Sight");
+response.setIsTenorTypeToggleStrikeThrough(true);
+
+response.setTenorDays("30");
+response.setNewTenorDays("45");
+response.setIsTenorDaysStrikeThrough(true);
+
+response.setTenordraftAtId("DA001");
+response.setTenordraftAtValue("Advising Bank");
+response.setNewTenordraftAtId("DA001");
+response.setNewTenordraftAtValue("Nominated Bank");
+response.setIsTenordraftAtStrikeThrough(true);
+
+response.setTenordraftAtDetails("Draft with full shipping documents");
+response.setNewTenordraftAtDetails("Draft with bill of lading only");
+response.setIsTenordraftAtDetailsStrikeThrough(false);
+
+// ========== EXPIRY ==========
+response.setExpiryPlaceId("EP001");
+response.setExpiryPlaceValue("At the counters of Advising Bank");
+response.setNewExpiryPlaceId("EP001");
+response.setNewExpiryPlaceValue("At the counters of Nominated Bank");
+response.setIsExpiryPlaceStrikeThrough(true);
+
+response.setOtherExpiryPlace("New York");
+response.setNewOtherExpiryPlace("Hong Kong");
+response.setIsOtherExpiryPlaceStrikeThrough(false);
+
+response.setExpiryDate("2024-12-31");
+
+// ========== SHIPMENT DETAILS ==========
+response.setLatestShipmentDate("2024-11-10");
+response.setNewLatestShipmentDate("2024-11-15");
+response.setIsLatestShipmentDateStrikeThrough(false);
+
+response.setShipFrom("Chennai Port, India");
+response.setNewShipFrom("Singapore Port");
+response.setIsShipFromStrikeThrough(false);
+
+response.setShipTo("Singapore Port");
+response.setNewShipTo("Hong Kong Port");
+response.setIsShipToStrikeThrough(false);
+
+response.setPlaceofReceipt("Chennai");
+response.setNewPlaceofReceipt("Singapore");
+response.setIsPlaceofReceiptStrikeThrough(false);
+
+response.setPlaceofDelivery("Singapore");
+response.setNewPlaceofDelivery("Hong Kong");
+response.setIsPlaceofDeliveryStrikeThrough(false);
+
+response.setCountry("Singapore");
+response.setCountryCode("SG");
+
+// ========== SHIPMENT TERMS ==========
+response.setModeofShipmentId("MODE001");
+response.setModeofShipmentValue("Sea Freight");
+response.setNewModeofShipmentId("MODE001");
+response.setNewModeofShipmentValue("Air Freight");
+response.setIsModeofShipmentStrikeThrough(false);
+
+response.setPartialShipmentId("PART001");
+response.setPartialShipmentValue("Allowed");
+response.setNewPartialShipmentId("PART001");
+response.setNewPartialShipmentValue("Not Allowed");
+response.setIsPartialShipmentStrikeThrough(false);
+
+response.setTranshipmentId("TRANS001");
+response.setTranshipmentValue("Not Allowed");
+response.setNewTranshipmentId("TRANS001");
+response.setNewTranshipmentValue("Allowed");
+response.setIsTranshipmentStrikeThrough(false);
+
+response.setShipmentTimeframeId("TIME001");
+response.setShipmentTimeframeValue("Within 30 days");
+response.setNewShipmentTimeframeId("TIME001");
+response.setNewShipmentTimeframeValue("Within 45 days");
+response.setIsShipmentTimeframeStrikeThrough(false);
+
+response.setShipmentPeriod("November 2024");
+response.setNewShipmentPeriod("November - December 2024");
+response.setIsShipmentPeriodStrikeThrough(false);
+
+// ========== GOODS & DOCUMENTS ==========
+response.setGoodsDescription("Cotton T-Shirts (WhiteColor)");
+response.setNewGoodsDescription("Cotton T-Shirts (White & Blue Color)");
+response.setIsGoodsDescriptionStrikeThrough(false);
+
+response.setDocumentsRequired("Bill of Lading, Invoice, Packing List");
+response.setNewDocumentsRequired("Bill of Lading, Invoice, Packing List, Certificate of Origin");
+response.setIsDocumentsRequiredStrikeThrough(false);
+
+response.setAdditionalConditionsDescription("Documents to be provided within 10 days");
+response.setNewAdditionalConditionsDescription("Documents to be provided within 15 days");
+response.setIsAdditionalConditionsDescriptionStrikeThrough(false);
+
+response.setCustomerInstructions("Please follow Standard procedures");
+response.setNewCustomerInstructions("Follow Special procedures as per amendment");
+response.setIsCustomerInstructionsStrikeThrough(false);
+
+// ========== CHARGES ==========
+response.setChargeTypeId("CHG001");
+response.setChargeTypeValue("All Charges Beneficiary");
+response.setNewChargeTypeId("CHG001");
+response.setNewChargeTypeValue("All Charges Applicant");
+response.setIsChargeTypeStrikeThrough(false);
+
+response.setIssuanceChargesId("ISSU001");
+response.setIssuanceChargesValue("USD 250");
+response.setNewIssuanceChargesId("ISSU001");
+response.setNewIssuanceChargesValue("USD 300");
+response.setIsIssuanceChargesStrikeThrough(false);
+
+response.setAdvisingChargesId("ADV001");
+response.setAdvisingChargesValue("USD 100");
+response.setNewAdvisingChargesId("ADV001");
+response.setNewAdvisingChargesValue("USD 125");
+response.setIsAdvisingChargesStrikeThrough(false);
+
+response.setReibursingBankChargesId("REIMB001");
+response.setReibursingBankChargesValue("USD 150");
+response.setNewReibursingBankChargesId("REIMB001");
+response.setNewReibursingBankChargesValue("USD 175");
+response.setIsReimbursingBankChargesStrikeThrough(false);
+
+response.setDiscrepancyChargesId("DISC001");
+response.setDiscrepancyChargesValue("USD 50");
+response.setNewDiscrepancyChargesId("DISC001");
+response.setNewDiscrepancyChargesValue("USD 75");
+response.setIsDiscrepancyChargesStrikeThrough(false);
+
+response.setConfirmationBankChargesId("CONF001");
+response.setConfirmationBankChargesValue("USD 200");
+response.setNewConfirmationBankChargesId("CONF001");
+response.setNewConfirmationBankChargesValue("USD 250");
+response.setIsConfirmationBankChargesStrikeThrough(false);
+
+response.setReimbursementRemittanceChargesId("RERE001");
+response.setReimbursementRemittanceChargesValue("USD 50");
+response.setNewReimbursementRemittanceChargesId("RERE001");
+response.setNewReimbursementRemittanceChargesValue("USD 75");
+response.setIsReimbursementRemittanceChargesStrikeThrough(false);
+
+response.setChargesDetails("All standard banking charges apply");
+response.setNewChargesDetails("All standard banking charges plus amendment fee apply");
+response.setIsChargesDetailsStrikeThrough(false);
+
+// ========== RELATED PARTIES & BENEFICIARY ==========
+response.setBeneficiaryRelatedPartyId("REL001");
+response.setBeneficiaryRelatedPartyValue("No");
+response.setNewBeneficiaryRelatedPartyId("REL001");
+response.setNewBeneficiaryRelatedPartyValue("Yes");
+response.setIsBeneficiaryRelatedPartyStrikeThrough(false);
+
+response.setBeneficiaryValue("Yes");
+response.setAdvisingBankValue("Yes");
+
+// ========== PRESENTATION DAYS ==========
+response.setPresentationDays("21");
+response.setNewPresentationDays("30");
+response.setIsPresentationDaysStrikeThrough(true);
+
+response.setDaysOfPresentationFromId("DPF001");
+response.setDaysOfPresentationFromValue("Bill of Lading Date");
+response.setNewDaysOfPresentationFromId("DPF001");
+response.setNewDaysOfPresentationFromValue("Invoice Date");
+response.setIsDaysOfPresentationFromStrikeThrough(false);
+
+response.setDaysOfPresentationFromDetails("30 days after Bill of Lading date as per original LC");
+response.setNewDaysOfPresentationFromDetails("45 days after Bill of Lading date as per amendment");
+response.setIsDaysOfPresentationFromDetailsStrikeThrough(true);
+
+// ========== METADATA ==========
+response.setActionList("Amendment Created");
+response.setLastModifiedBy("trade_user_001");
+response.setLastModifiedTime("2024-11-05 10:50:00");
+response.setCreatedBy("trade_system");
+response.setCreatedDatetime("2024-11-05 10:50:00");
+response.setRepairRejectReason("");
+response.setStepRecId("STEP-001");
+
+System.out.println("✅ Complete ViewAmendmentLCResponseExp object created!");
+System.out.println("Ready for Jasper Report generation!");
