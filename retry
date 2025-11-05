@@ -1,4 +1,313 @@
 
+This XML file does not appear to have any style information associated with it. The document tree is shown below.
+<!--  Subreport: Key LC Terms  -->
+<subreport isUsingCache="true">
+<reportElement key="keyLCTerms" positionType="Float" x="1" y="0" width="494" height="10" isRemoveLineWhenBlank="true" uuid="8fbb6b8e-1839-47f0-be71-609aa3c1a2be"/>
+<subreportParameter name="P_SUBREPORT_DIR">
+<subreportParameterExpression>
+<![CDATA[ $P{P_SUBREPORT_DIR} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="companyReference">
+<subreportParameterExpression>
+<![CDATA[ $P{companyReference} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newCompanyReference">
+<subreportParameterExpression>
+<![CDATA[ $P{newCompanyReference} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isCompanyReferenceStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isCompanyReferenceStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="bankLCReference">
+<subreportParameterExpression>
+<![CDATA[ $P{bankLCReference} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="requestBeneConsentValue">
+<subreportParameterExpression>
+<![CDATA[ $P{requestBeneConsentValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="transferableLCValue">
+<subreportParameterExpression>
+<![CDATA[ $P{transferableLCValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newTransferableLCValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newTransferableLCValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isTransferableLCStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isTransferableLCStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="lcTypeValue">
+<subreportParameterExpression>
+<![CDATA[ $P{lcTypeValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="amendmentDate">
+<subreportParameterExpression>
+<![CDATA[ $P{amendmentDate} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="confirmationToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{confirmationToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newConfirmationToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newConfirmationToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isConfirmationToggleStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isConfirmationToggleStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="reimbursementInstruction">
+<subreportParameterExpression>
+<![CDATA[ $P{reimbursementInstruction} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newReimbursementInstruction">
+<subreportParameterExpression>
+<![CDATA[ $P{newReimbursementInstruction} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isReimbursementInstructionStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isReimbursementInstructionStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="ttReimbursementAllowed">
+<subreportParameterExpression>
+<![CDATA[ $P{ttReimbursementAllowed} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="lcAmountCCYValue">
+<subreportParameterExpression>
+<![CDATA[ $P{lcAmountCCYValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="amountChangeValue">
+<subreportParameterExpression>
+<![CDATA[ $P{amountChangeValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="amount">
+<subreportParameterExpression>
+<![CDATA[ $P{amount} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="additionalAmounts">
+<subreportParameterExpression>
+<![CDATA[ $P{additionalAmounts} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="additionalAmountDesc">
+<subreportParameterExpression>
+<![CDATA[ $P{additionalAmountDesc} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newAdditionalAmountDesc">
+<subreportParameterExpression>
+<![CDATA[ $P{newAdditionalAmountDesc} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isAdditionalAmountsStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isAdditionalAmountsStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="toleranceToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{toleranceToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newToleranceToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newToleranceToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isToleranceToggleStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isToleranceToggleStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="incotermYearValue">
+<subreportParameterExpression>
+<![CDATA[ $P{incotermYearValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="availableWithValue">
+<subreportParameterExpression>
+<![CDATA[ $P{availableWithValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newAvailableWithValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newAvailableWithValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isAvailableWithStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isAvailableWithStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="advisingBankName">
+<subreportParameterExpression>
+<![CDATA[ $P{advisingBankName} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="advisingBankId">
+<subreportParameterExpression>
+<![CDATA[ $P{advisingBankId} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="advisingBankCountryName">
+<subreportParameterExpression>
+<![CDATA[ $P{advisingBankCountryName} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="advisingBankAddress">
+<subreportParameterExpression>
+<![CDATA[ $P{advisingBankAddress} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="expiryPlaceValue">
+<subreportParameterExpression>
+<![CDATA[ $P{expiryPlaceValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newExpiryPlaceValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newExpiryPlaceValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isExpiryPlaceStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isExpiryPlaceStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="expiryDate">
+<subreportParameterExpression>
+<![CDATA[ $P{expiryDate} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="tenorTypeToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{tenorTypeToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newTenorTypeToggleValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newTenorTypeToggleValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isTenorTypeToggleStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isTenorTypeToggleStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="availableByValue">
+<subreportParameterExpression>
+<![CDATA[ $P{availableByValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="tenorDays">
+<subreportParameterExpression>
+<![CDATA[ $P{tenorDays} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newTenorDays">
+<subreportParameterExpression>
+<![CDATA[ $P{newTenorDays} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isTenorDaysStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isTenorDaysStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="tenordraftAtValue">
+<subreportParameterExpression>
+<![CDATA[ $P{tenordraftAtValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newTenordraftAtValue">
+<subreportParameterExpression>
+<![CDATA[ $P{newTenordraftAtValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isTenordraftAtStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isTenordraftAtStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="draftDetailsValue">
+<subreportParameterExpression>
+<![CDATA[ $P{draftDetailsValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="presentationDays">
+<subreportParameterExpression>
+<![CDATA[ $P{presentationDays} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newPresentationDays">
+<subreportParameterExpression>
+<![CDATA[ $P{newPresentationDays} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isPresentationDaysStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isPresentationDaysStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="daysOfPresentationFromValue">
+<subreportParameterExpression>
+<![CDATA[ $P{daysOfPresentationFromValue} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="daysOfPresentationFromDetails">
+<subreportParameterExpression>
+<![CDATA[ $P{daysOfPresentationFromDetails} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="newDaysOfPresentationFromDetails">
+<subreportParameterExpression>
+<![CDATA[ $P{newDaysOfPresentationFromDetails} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isDaysOfPresentationFromDetailsStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isDaysOfPresentationFromDetailsStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<subreportParameter name="isDaysOfPresentationFromStrikeThrough">
+<subreportParameterExpression>
+<![CDATA[ $P{isDaysOfPresentationFromStrikeThrough} ]]>
+</subreportParameterExpression>
+</subreportParameter>
+<dataSourceExpression>
+<![CDATA[ new JREmptyDataSource() ]]>
+</dataSourceExpression>
+<subreportExpression>
+<![CDATA[ $P{P_SUBREPORT_DIR} + "Amd_KeyLCTerms.jasper" ]]>
+</subreportExpression>
+</subreport>
+
+
+======================
 // Complete Dummy ViewAmendmentLCResponseExp Object
 ViewAmendmentLCResponseExp response = new ViewAmendmentLCResponseExp();
 
